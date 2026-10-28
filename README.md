@@ -31,3 +31,4 @@ alembic downgrade base   # gỡ toàn bộ schema
 - [x] EB-102 SQLAlchemy models + Alembic migration #1 (15 bảng)
 - [x] EB-103 Seed taxonomy: 68 tags (30 Unit Global Success 10-11-12, 15 dạng bài, 4 độ khó...) + `GET /api/v1/tags`
 - [ ] EB-104 Auth JWT + Workspace
+- [x] EB-105 API khung: Source-Exams (tạo/list/chi tiết) + Question-Items lọc 4 trục (khối qua tag/Unit/dạng bài/độ khó) + trạng thái + search + phân trang, mọi truy vấn qua chốt quyền workspace.
