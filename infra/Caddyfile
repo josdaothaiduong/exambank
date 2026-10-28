@@ -1,0 +1,21 @@
+{$DOMAIN} {
+	encode gzip
+
+	# API đi qua đường /api/* trên cùng tên miền -> không lo CORS khi chung domain
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Swagger chỉ bật khi cần: /docs
+	handle /docs* {
+		reverse_proxy api:8000
+	}
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	# Còn lại là giao diện web
+	handle {
+		reverse_proxy web:3000
+	}
+}

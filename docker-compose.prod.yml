@@ -1,0 +1,46 @@
+# Production công khai internet — dùng kèm file gốc:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Khác biệt so với dev:
+# - Chỉ Caddy (80/443, HTTPS tự động bằng Let's Encrypt) được mở ra internet.
+# - DB / Redis / MinIO KHÔNG mở port ra ngoài.
+# - Web/API chỉ nghe trong mạng nội bộ Docker, Caddy làm cổng duy nhất.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}  # bắt buộc đặt trong .env.production, VD: exambank.example.edu.vn
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api]
+
+  web:
+    restart: unless-stopped
+    ports: []        # không mở 3000 ra ngoài nữa
+    environment:
+      NEXT_PUBLIC_API_URL: https://${DOMAIN}
+
+  api:
+    restart: unless-stopped
+    ports: []        # không mở 8000 ra ngoài nữa
+    environment:
+      CORS_ORIGINS: https://${DOMAIN}
+
+  db:
+    restart: unless-stopped
+    ports: []
+  redis:
+    restart: unless-stopped
+    ports: []
+  minio:
+    restart: unless-stopped
+    ports: []
+  worker:
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

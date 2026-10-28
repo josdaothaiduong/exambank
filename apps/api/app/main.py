@@ -10,9 +10,11 @@ app = FastAPI(title="ExamBank AI API", version="0.1.0")
 # EB-106: web (localhost:3000) gọi API (localhost:8000) là cross-origin — thiếu CORS là web không gọi được API.
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
+from app.config import settings as _settings  # noqa: E402
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[o.strip() for o in _settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
