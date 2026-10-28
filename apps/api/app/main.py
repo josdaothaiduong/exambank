@@ -7,10 +7,16 @@ from app.models import Tag
 
 app = FastAPI(title="ExamBank AI API", version="0.1.0")
 
+from app.routers import auth as auth_router  # noqa: E402
+from app.routers import workspaces as workspaces_router  # noqa: E402
+
+app.include_router(auth_router.router)
+app.include_router(workspaces_router.router)
+
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "exambank-api", "milestone": "EB-103"}
+    return {"status": "ok", "service": "exambank-api", "milestone": "EB-104"}
 
 
 @app.get("/api/v1/tags")
