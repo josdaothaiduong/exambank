@@ -1,1 +1,35 @@
-{"compilerOptions":{"allowJs":true,"incremental":true,"jsx":"preserve","lib":["dom","dom.iterable","esnext"],"module":"esnext","moduleResolution":"bundler","noEmit":true,"plugins":[{"name":"next"}],"skipLibCheck":true,"strict":true,"target":"ES2022"},"exclude":["node_modules"],"include":["next-env.d.ts","**/*.ts","**/*.tsx",".next/types/**/*.ts"]}
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "incremental": true,
+    "jsx": "preserve",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "exclude": [
+    "node_modules"
+  ],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ]
+}
