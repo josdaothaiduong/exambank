@@ -1,0 +1,1 @@
+{"dependencies":{"next":"14.2.*","react":"18.3.*","react-dom":"18.3.*"},"devDependencies":{"@types/node":"20.*","@types/react":"18.*","typescript":"5.*"},"name":"exambank-web","private":true,"scripts":{"build":"next build","dev":"next dev -p 3000","start":"next start -p 3000"},"version":"0.1.0"}

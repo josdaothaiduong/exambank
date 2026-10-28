@@ -1,0 +1,29 @@
+id,week,task,type,priority,depends_on,acceptance
+EB-101,1,Khởi tạo monorepo + Docker Compose + env example,infra,P0,,1 lệnh docker compose up chạy đủ 6 service
+EB-102,1,Migration #1 từ SQL Bước 1 + SQLAlchemy models,backend,P0,EB-101,Đủ 11 bảng chạy migration lên/xuống được
+EB-103,1,Seed taxonomy khối/Unit/QuestionType/Difficulty,backend,P0,EB-102,GET /tags?kind=unit&grade=12 trả đúng 10 Unit
+EB-104,1,Auth JWT + Workspace + lọc workspace_id,backend,P0,EB-102,User A không đọc được dữ liệu User B (có test)
+EB-105,1,API khung source-exams + question-items list/lọc,backend,P0,EB-104,Swagger đúng contract Bước 1 mục 6
+EB-106,1,Frontend Next.js port 4 tab từ prototype + đăng nhập,frontend,P0,EB-105,Tạo được đề gốc trên web và thấy trong danh sách
+EB-107,1,CI lint + test khi push,infra,P1,EB-101,Push code CI tự chạy và báo khi test hỏng
+EB-201,2,Sanitize HTML server-side giữ tín hiệu đáp án,backend,P0,EB-105,Script/thẻ lạ bị xóa màu đáp án còn nguyên
+EB-202,2,Port parser sang Python tách câu/passage/A-D,backend,P0,EB-201,Kết quả giống prototype trên 3 mẫu A/B/C
+EB-203,2,Answer Detector đỏ/highlight/bold/bảng đáp án,backend,P0,EB-202,Đúng Parser Contract hoặc để trống + warning
+EB-204,2,Upload docx qua mammoth dùng chung parser,backend,P0,EB-202,Paste và docx giống nhau >=95% trên cùng 1 đề
+EB-205,2,Dedup hash chặn trùng cứng,backend,P0,EB-202,Nạp lại đề lần 2 báo trùng không tạo câu mới
+EB-206,2,Review Queue UI thật + PATCH review,fullstack,P0,"EB-203,EB-105",Duyệt xong câu xuất hiện ở status=approved
+EB-207,2,Kiểm thử bộ đề vàng 5 đề thật,qa,P0,EB-206,Đạt chỉ số mục 8 của lộ trình
+EB-301,3,AIProvider trừu tượng + log vào ai_solutions,backend,P0,EB-102,Đổi model bằng env không sửa code
+EB-302,3,Prompt theo dạng bài + ép JSON schema + retry,backend,P0,EB-301,AI sai định dạng thì retry/lỗi rõ không lưu bừa
+EB-303,3,Celery ai_solve_batch + tiến độ + cổng confidence 0.70,fullstack,P0,EB-302,Giải 20 câu nền confidence <0.70 khóa Duyệt
+EB-304,3,Màn hình duyệt AI so sánh + lưu answer_source=ai_solved,frontend,P0,EB-303,Không câu AI nào vào kho khi chưa duyệt
+EB-305,3,Tìm kiếm/lọc kho 4 trục + phân trang,fullstack,P0,EB-206,Lọc đúng tập câu <1 giây với 1000 câu
+EB-306,3,Chống trùng ngữ nghĩa bằng embedding,backend,P1,EB-305,Câu cùng nội dung khác diễn đạt bị cảnh báo
+EB-307,3,Đo chất lượng AI trên 50 câu vàng,qa,P0,EB-302,Báo cáo % đúng theo từng dạng bài
+EB-401,4,Seed 3 template đề (TN THPT/45p/15p),backend,P0,EB-102,Template đúng cấu trúc từng phần
+EB-402,4,Thuật toán sinh đề + lỗi 422 khi thiếu câu,backend,P0,"EB-305,EB-401",Thiếu câu báo rõ phần nào bao nhiêu câu
+EB-403,4,Hoán vị + nhiều mã đề + cân bằng đáp án,backend,P0,EB-402,4 mã đề đáp án tra đúng lệch <=10%
+EB-404,4,Export Word theo mẫu trường (HS/GV/ma trận),backend,P0,EB-403,File Word in được ngay không sửa format
+EB-405,4,Export PDF + xem trước trên web,backend,P1,EB-404,PDF và Word giống hệt nội dung
+EB-406,4,Vá lỗi UAT vòng 1,qa,P0,EB-404,Đóng >=90% lỗi UAT
+EB-407,4,Deploy staging + backup + hướng dẫn 1 trang,infra,P0,EB-406,Giáo viên tự làm trọn vòng đời trên staging

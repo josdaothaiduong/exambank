@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ExamBank AI — Prototype Bước 2: Copy-Paste & Duyệt câu hỏi</title>
+<style>
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;background:#f4f6fb;color:#17233b}
+  header{background:#173a7a;color:#fff;padding:16px 22px} header h1{margin:0;font-size:21px} header p{margin:5px 0 0;opacity:.88;font-size:13px}
+  nav{display:flex;gap:8px;flex-wrap:wrap;padding:12px 22px;background:#fff;border-bottom:1px solid #dde3ee;position:sticky;top:0;z-index:5}
+  nav button{border:1px solid #c6d0e4;background:#fff;padding:9px 14px;border-radius:999px;cursor:pointer;font-weight:650}
+  nav button.active{background:#173a7a;color:#fff;border-color:#173a7a}
+  main{max-width:1120px;margin:0 auto;padding:20px}
+  .card{background:#fff;border:1px solid #dde3ee;border-radius:14px;padding:18px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  label{font-size:13px;font-weight:650;display:block;margin-bottom:5px}
+  input,select,textarea{width:100%;padding:9px;border:1px solid #c6d0e4;border-radius:9px;font:inherit}
+  .btn{background:#173a7a;color:#fff;border:0;padding:10px 16px;border-radius:9px;cursor:pointer;font-weight:700}
+  .btn.alt{background:#fff;color:#173a7a;border:1px solid #173a7a}.btn.green{background:#147a3d}.btn.red{background:#b42318}.btn:disabled{opacity:.45;cursor:not-allowed}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  #pasteBox{min-height:190px;border:2px dashed #7d94c2;border-radius:12px;padding:14px;background:#fbfcff;outline:none;line-height:1.65}
+  #pasteBox:focus{border-color:#173a7a}
+  .hint{font-size:13px;color:#53627f}.warn{background:#fff6e5;border:1px solid #f0d48a;padding:10px 12px;border-radius:9px;font-size:13px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+  .stat{background:#eef3ff;border-radius:11px;padding:13px;text-align:center}.stat b{font-size:25px;display:block}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
+  .b-red{background:#ffe4e0;color:#8f1d12}.b-hl{background:#fff3a3;color:#6d5700}.b-ai{background:#e6dcff;color:#452a8a}.b-teacher{background:#d7f2df;color:#145c2e}.b-none{background:#eee;color:#555}.b-ok{background:#d7f2df;color:#145c2e}
+  .q{border:1px solid #dde3ee;border-radius:12px;padding:15px;margin-bottom:12px;background:#fff}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .opt{border:1px solid #c6d0e4;border-radius:9px;padding:9px;text-align:left;background:#fff;cursor:pointer;font:inherit}
+  .opt.correct{border:2px solid #147a3d;background:#eafaf0;font-weight:700}
+  .passage{background:#f7f9ff;border-left:4px solid #173a7a;padding:12px;border-radius:8px;line-height:1.65;white-space:pre-wrap}
+  .hidden{display:none} .small{font-size:12.5px;color:#53627f}
+  @media(max-width:650px){.opts{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ExamBank AI — Prototype Bước 2</h1>
+  <p>Luồng cốt lõi: Paste đề (giữ đáp án tô đỏ / highlight) → Phân tích → Duyệt → Vào kho → Tạo đề. Dữ liệu mô phỏng trong trình duyệt, bám API/DB ở Bước 1.</p>
+</header>
+<nav>
+  <button data-tab="import" class="active">1. Nhập đề</button>
+  <button data-tab="review">2. Duyệt câu hỏi <span id="reviewCount"></span></button>
+  <button data-tab="bank">3. Kho câu hỏi <span id="bankCount"></span></button>
+  <button data-tab="builder">4. Tạo đề</button>
+</nav>
+<main>
+
+<!-- ============ TAB 1: IMPORT ============ -->
+<section id="tab-import">
+  <div class="card">
+    <h2 style="margin-top:0">Thông tin đề gốc — POST /source-exams</h2>
+    <div class="grid">
+      <div><label>Tên đề</label><input id="examTitle" value="Đề mẫu — Giữa kỳ 1, Lớp 12"></div>
+      <div><label>Khối lớp</label><select id="examGrade"><option>10</option><option>11</option><option selected>12</option></select></div>
+      <div><label>Loại kiểm tra</label><select id="examKind"><option value="15min">15 phút</option><option value="45min">45 phút</option><option selected value="mid_term">Giữa kỳ</option><option value="graduation">Tốt nghiệp THPT</option></select></div>
+      <div><label>Nguồn</label><input id="examSource" value="Trường THPT — Đề mẫu prototype"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Dán đề vào đây — Ctrl+V từ Word / Google Docs</h2>
+    <p class="hint">Ô này đọc <b>HTML của clipboard</b> (không đọc text thuần) nên giữ được màu đỏ và highlight. Chỉ giữ lại: màu chữ, màu nền/highlight, in đậm, gạch chân. Paste từ PDF/Zalo có thể mất màu — khi đó câu sẽ được xếp vào “chưa có đáp án”, hệ thống không đoán bừa.</p>
+    <div id="pasteBox" contenteditable="true" aria-label="Ô dán đề"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn alt" id="btnSampleRed">Nạp mẫu A: đáp án tô đỏ</button>
+      <button class="btn alt" id="btnSampleHl">Nạp mẫu B: highlight + Reading</button>
+      <button class="btn alt" id="btnSampleNone">Nạp mẫu C: chưa có đáp án</button>
+      <button class="btn alt" id="btnClear">Xóa ô dán</button>
+      <button class="btn" id="btnParse">Phân tích đề →</button>
+    </div>
+    <p class="warn" style="margin-top:12px">Định dạng đề mẫu mà parser hiểu: mỗi câu bắt đầu bằng <b>Question 1:</b> (hoặc Câu 1:), các phương án viết dạng <b>A. ... B. ... C. ... D. ...</b> trên cùng đoạn. Đây cũng chính là quy ước sẽ áp dụng cho parser thật ở Bước 3.</p>
+  </div>
+
+  <div class="card hidden" id="parseResult">
+    <h2 style="margin-top:0">Kết quả phân tích — GET /import-jobs/:id</h2>
+    <div class="stats">
+      <div class="stat"><b id="stTotal">0</b>Tổng câu tách được</div>
+      <div class="stat"><b id="stWith">0</b>Đã có đáp án</div>
+      <div class="stat"><b id="stNeed">0</b>Chưa có đáp án</div>
+      <div class="stat"><b id="stDup">0</b>Trùng với kho</div>
+      <div class="stat"><b id="stPassage">0</b>Passage / nhóm</div>
+    </div>
+    <p id="parseMsg"></p>
+    <button class="btn" id="btnGoReview">Đi tới màn hình Duyệt →</button>
+  </div>
+</section>
+
+<!-- ============ TAB 2: REVIEW ============ -->
+<section id="tab-review" class="hidden">
+  <div class="card">
+    <h2 style="margin-top:0">Hàng đợi duyệt — GET /source-exams/:id/review-queue</h2>
+    <p class="hint">Click vào 1 phương án để đổi đáp án (nguồn sẽ thành <span class="badge b-teacher">teacher_manual</span>). Câu chưa có đáp án: bấm “AI giải (mô phỏng)” để xem đề xuất — <b>chưa bấm Duyệt thì câu chưa vào kho</b>.</p>
+    <div id="reviewList"><p class="hint">Chưa có câu nào. Hãy nạp và phân tích 1 đề mẫu ở tab 1.</p></div>
+  </div>
+</section>
+
+<!-- ============ TAB 3: BANK ============ -->
+<section id="tab-bank" class="hidden">
+  <div class="card">
+    <h2 style="margin-top:0">Kho câu hỏi — chỉ câu approved</h2>
+    <div class="grid">
+      <div><label>Tìm kiếm</label><input id="fSearch" placeholder="environment, since, ..."></div>
+      <div><label>Dạng bài</label><select id="fType"><option value="">Tất cả</option><option value="grammar_mc">Ngữ pháp</option><option value="vocabulary_mc">Từ vựng</option><option value="reading_comprehension">Đọc hiểu</option><option value="cloze">Đọc điền từ</option></select></div>
+      <div><label>Độ khó</label><select id="fDiff"><option value="">Tất cả</option><option>NB</option><option>TH</option><option>VD</option><option>VDC</option></select></div>
+      <div><label>Unit / Chủ đề</label><select id="fUnit"><option value="">Tất cả</option><option>Unit 1</option><option>Unit 2</option><option>Unit 3</option><option>Environment</option></select></div>
+    </div>
+    <div id="bankList" style="margin-top:14px"><p class="hint">Kho đang trống. Duyệt câu ở tab 2 để đưa vào kho.</p></div>
+  </div>
+</section>
+
+<!-- ============ TAB 4: BUILDER ============ -->
+<section id="tab-builder" class="hidden">
+  <div class="card">
+    <h2 style="margin-top:0">Tạo đề từ kho — POST /exams/generate</h2>
+    <div class="grid">
+      <div><label>Mẫu đề</label><select id="tpl"><option value="3">Kiểm tra nhanh: 3 câu</option><option value="5">Kiểm tra 15 phút: 5 câu</option><option value="10">Kiểm tra 45 phút: 10 câu</option></select></div>
+      <div><label>Số mã đề</label><select id="verCount"><option>1</option><option selected>2</option><option>4</option></select></div>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="btnGenerate">Sinh đề từ câu approved</button><button class="btn alt" id="btnPrint">In / Lưu PDF bản xem trước</button></div>
+    <div id="genResult" style="margin-top:14px"><p class="hint">Đề chỉ lấy câu đã duyệt ở tab 2. Nếu kho thiếu, hệ thống báo rõ thiếu bao nhiêu câu thay vì sinh đề thiếu chất lượng.</p></div>
+  </div>
+</section>
+</main>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+let reviewItems = [];   // pending_review / needs_answer
+let bankItems = [];     // approved only
+let lastGenerated = [];
+
+// ---------- Samples ----------
+const SAMPLE_RED = `<p>Question 1: She has lived in this city ______ 2010. A. for B. <span style="color:#ff0000">since</span> C. in D. at</p>
+<p>Question 2: Choose the word CLOSEST in meaning to "rapid": A. slow B. <span style="color:#ff0000">fast</span> C. weak D. late</p>
+<p>Question 3: If it ______ tomorrow, we will stay at home. A. rains B. <span style="color:#ff0000">should rain</span> C. rained D. would rain</p>`;
+
+const SAMPLE_HL = `<p>Read the passage and choose the correct answer.</p>
+<p>Green living is becoming more popular as people realise how their daily choices affect the environment. Small actions, such as recycling and saving electricity, can make a big difference when millions of people do them together.</p>
+<p>Question 1: What is the main idea of the passage? A. How to save money at home B. <span style="background-color:#ffff00">Daily choices can help protect the environment</span> C. Why recycling is difficult D. The history of green living</p>
+<p>Question 2: The word "popular" in the passage is closest in meaning to ______. A. rare B. expensive C. <span style="background-color:#ffff00">common</span> D. strange</p>`;
+
+const SAMPLE_NONE = `<p>Question 1: She has lived in this city ______ 2010. A. for B. since C. in D. at</p>
+<p>Question 2: The students ______ their project by the end of this week. A. will have finished B. finish yesterday C. are finish D. finished tomorrow</p>
+<p>Question 3: Choose the word CLOSEST in meaning to "essential": A. unnecessary B. important C. optional D. extra</p>`;
+// Đáp án đúng của Mẫu C chỉ dùng cho AI mô phỏng trong prototype (backend thật sẽ gọi AI)
+const AI_KEYS = { "since": "B", "will have finished": "A", "essential": "B" };
+
+// ---------- Paste: giữ HTML, chỉ sanitize tín hiệu đáp án ----------
+$("#pasteBox").addEventListener("paste", e => {
+  const html = e.clipboardData && e.clipboardData.getData("text/html");
+  if (html) { e.preventDefault(); document.execCommand("insertHTML", false, sanitizeHtml(html)); }
+});
+function sanitizeHtml(html){
+  const t = document.createElement("template"); t.innerHTML = html;
+  t.content.querySelectorAll("*").forEach(el => {
+    const keep = {};
+    const cs = el.style;
+    if (cs.color) keep.color = cs.color;
+    if (cs.backgroundColor) keep.backgroundColor = cs.backgroundColor;
+    const tag = el.tagName;
+    el.removeAttribute("class"); el.removeAttribute("id");
+    [...el.attributes].forEach(a => { if (a.name !== "style") el.removeAttribute(a.name); });
+    el.style.cssText = Object.entries(keep).map(([k,v]) => (k==="backgroundColor"?"background-color":k)+":"+v).join(";");
+    if (tag === "SCRIPT" || tag === "STYLE" || tag === "IMG") el.remove();
+    // Word thường dùng <font color="red">
+    if (tag === "FONT" && el.getAttribute && el.color) {}
+  });
+  // Chuẩn hóa <font color>
+  t.content.querySelectorAll("font[color]").forEach(f => { f.style.color = f.getAttribute("color"); f.removeAttribute("color"); });
+  return t.innerHTML;
+}
+function isRed(c){ return /rgb\(\s*255\s*,\s*0\s*,\s*0\s*\)|#ff0000|red/i.test(c||""); }
+function isHighlight(c){ return !!c && !/rgba?\(\s*0\s*,\s*0\s*,\s*0|transparent|#ffffff|rgb\(\s*255\s*,\s*255\s*,\s*255/i.test(c); }
+
+// Đánh dấu vùng đáp án trong DOM -> [[A]]...[[/A:source]]
+function markAnswers(root){
+  let source = null;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(el => {
+    const red = isRed(el.style.color), hl = isHighlight(el.style.backgroundColor);
+    if ((red || hl) && el.children.length === 0 && el.textContent.trim()) {
+      source = red ? "red_text" : "highlight";
+      el.textContent = "[[A]]" + el.textContent + "[[/A:" + source + "]]";
+    }
+  });
+  return source;
+}
+
+// ---------- Parser (bản mẫu của Parser Contract - Bước 1, mục 6.1) ----------
+function textOf(el){ return (el.innerText !== undefined && el.innerText !== "") ? el.innerText : (el.textContent || ""); }
+function parseHtml(html){
+  const wrap = document.createElement("div"); wrap.innerHTML = sanitizeHtml(html);
+  markAnswers(wrap);
+  const raw = textOf(wrap).replace(/\u00a0/g, " ").trim();
+  const parts = raw.split(/(?=Question\s*\d+\s*:|Câu\s*\d+\s*:)/i);
+  let passageText = "";
+  const questions = [];
+  parts.forEach(part => {
+    part = part.trim(); if (!part) return;
+    const m = part.match(/^(?:Question|Câu)\s*(\d+)\s*:\s*/i);
+    if (!m) { if (part.length > 40) passageText = (passageText + " " + part).trim(); return; }
+    const body = part.slice(m[0].length);
+    const optRe = /(?:^|\s)([A-D])\.\s+/g; const marks = [...body.matchAll(optRe)];
+    if (marks.length < 2) { questions.push({ n:m[1], stem:body, options:[], detected:null, warnings:["Không tách được phương án A-D"] }); return; }
+    const stem = body.slice(0, marks[0].index).trim();
+    const options = marks.map((mk, i) => {
+      const start = mk.index + mk[0].length;
+      const end = i+1 < marks.length ? marks[i+1].index : body.length;
+      let txt = body.slice(start, end).trim();
+      let detected = null;
+      const dm = txt.match(/\[\[A\]\]([\s\S]*?)\[\[\/A:(\w+)\]\]/);
+      if (dm) { detected = dm[2]; txt = txt.replace(/\[\[A\]\]|\[\[\/A:\w+\]\]/g, "").trim(); }
+      return { label: mk[1], text: txt, detectedSource: detected };
+    });
+    const ansOpt = options.find(o => o.detectedSource);
+    questions.push({
+      n: m[1], stem,
+      options: options.map(o => ({ label:o.label, text:o.text })),
+      detected: ansOpt ? { label: ansOpt.label, source: ansOpt.detectedSource, confidence: ansOpt.detectedSource==="red_text"?0.99:0.97 } : null,
+      warnings: []
+    });
+  });
+  return { passageText, questions };
+}
+function dedupHash(q){ return (q.stem + "|" + q.options.map(o=>o.text).sort().join("|")).toLowerCase().replace(/\s+/g," ").trim(); }
+
+$("#btnSampleRed").onclick = () => { $("#pasteBox").innerHTML = SAMPLE_RED; };
+$("#btnSampleHl").onclick  = () => { $("#pasteBox").innerHTML = SAMPLE_HL; };
+$("#btnSampleNone").onclick= () => { $("#pasteBox").innerHTML = SAMPLE_NONE; };
+$("#btnClear").onclick = () => { $("#pasteBox").innerHTML = ""; };
+
+$("#btnParse").onclick = () => {
+  const html = $("#pasteBox").innerHTML.trim();
+  if (!html || !textOf($("#pasteBox")).trim()) { alert("Ô dán đang trống. Hãy nạp 1 đề mẫu hoặc paste đề từ Word."); return; }
+  const { passageText, questions } = parseHtml(html);
+  const passage = passageText ? { id:"p"+Date.now(), type:"reading_comprehension", content:passageText } : null;
+  let dup = 0;
+  reviewItems = questions.map((q,i) => {
+    const hash = dedupHash(q);
+    const isDup = bankItems.some(b => b.hash === hash);
+    if (isDup) dup++;
+    return {
+      id:"q"+Date.now()+"_"+i, stem:q.stem, options:q.options,
+      answerLabel:q.detected ? q.detected.label : null,
+      answerSource:q.detected ? q.detected.source : "unknown",
+      confidence:q.detected ? q.detected.confidence : null,
+      type: passage ? "reading_comprehension" : "grammar_mc",
+      difficulty:"TH", unit: passage ? "Environment" : "Unit 3",
+      explanation:"", passageId: passage ? passage.id : null, passageContent: passage ? passage.content : "",
+      hash, isDup, warnings:q.warnings
+    };
+  });
+  const withA = reviewItems.filter(q=>q.answerLabel).length;
+  $("#stTotal").textContent = reviewItems.length;
+  $("#stWith").textContent = withA;
+  $("#stNeed").textContent = reviewItems.length - withA;
+  $("#stDup").textContent = dup;
+  $("#stPassage").textContent = passage ? 1 : 0;
+  $("#parseMsg").innerHTML = "Đã tách thành <b>"+reviewItems.length+" câu</b>" + (passage ? " kèm <b>1 passage</b> (các câu con được gắn chung passage, không tách rời)." : ".") + " Hãy sang tab Duyệt để kiểm tra trước khi vào kho.";
+  $("#parseResult").classList.remove("hidden");
+  renderReview(); updateCounts();
+};
+$("#btnGoReview").onclick = () => switchTab("review");
+
+// ---------- Review ----------
+function sourceBadge(s){ return s==="red_text"?'<span class="badge b-red">đáp án: tô đỏ</span>':s==="highlight"?'<span class="badge b-hl">đáp án: highlight</span>':s==="ai_solved"?'<span class="badge b-ai">AI đề xuất</span>':s==="teacher_manual"?'<span class="badge b-teacher">giáo viên chọn</span>':'<span class="badge b-none">chưa có đáp án</span>'; }
+function renderReview(){
+  const box = $("#reviewList");
+  if (!reviewItems.length) { box.innerHTML = '<p class="hint">Hàng đợi trống — tất cả câu đã được duyệt/loại, hoặc chưa phân tích đề nào.</p>'; return; }
+  box.innerHTML = "";
+  reviewItems.forEach(q => {
+    const div = document.createElement("div"); div.className = "q";
+    div.innerHTML =
+      (q.passageContent ? '<div class="passage"><b>Passage (nhóm chung):</b>\n'+escapeHtml(q.passageContent)+'</div>' : '') +
+      '<p style="margin:10px 0 4px"><b>Câu:</b> '+escapeHtml(q.stem)+'</p>' +
+      '<div class="row">'+sourceBadge(q.answerSource)+(q.confidence?'<span class="small">độ tin cậy: '+q.confidence+'</span>':'')+(q.isDup?'<span class="badge b-red">TRÙNG với kho</span>':'')+(q.warnings&&q.warnings.length?'<span class="badge b-none">'+escapeHtml(q.warnings.join(", "))+'</span>':'')+'</div>' +
+      '<div class="opts">'+ q.options.map(o=>'<button class="opt '+(o.label===q.answerLabel?"correct":"")+'" data-act="pick" data-id="'+q.id+'" data-label="'+o.label+'"><b>'+o.label+'.</b> '+escapeHtml(o.text)+'</button>').join("") +'</div>' +
+      '<div class="grid" style="margin-top:10px">' +
+        '<div><label>Dạng bài</label><select data-field="type" data-id="'+q.id+'">'+["grammar_mc","vocabulary_mc","reading_comprehension","cloze"].map(t=>'<option '+(t===q.type?"selected":"")+' value="'+t+'">'+t+'</option>').join("")+'</select></div>' +
+        '<div><label>Độ khó</label><select data-field="difficulty" data-id="'+q.id+'">'+["NB","TH","VD","VDC"].map(d=>'<option '+(d===q.difficulty?"selected":"")+'>'+d+'</option>').join("")+'</select></div>' +
+        '<div><label>Unit / Chủ đề</label><select data-field="unit" data-id="'+q.id+'">'+["Unit 1","Unit 2","Unit 3","Environment"].map(u=>'<option '+(u===q.unit?"selected":"")+'>'+u+'</option>').join("")+'</select></div>' +
+      '</div>' +
+      (q.explanation ? '<p class="small" style="margin-top:8px"><b>Lời giải:</b> '+escapeHtml(q.explanation)+'</p>' : '') +
+      '<div class="row" style="margin-top:10px">' +
+        (!q.answerLabel ? '<button class="btn alt" data-act="ai" data-id="'+q.id+'">AI giải (mô phỏng)</button>' : '') +
+        '<button class="btn green" data-act="approve" data-id="'+q.id+'" '+(q.answerLabel?"":"disabled title=\"Phải có đáp án mới duyệt được\"")+'>Duyệt → Vào kho</button>' +
+        '<button class="btn red" data-act="reject" data-id="'+q.id+'">Loại</button>' +
+      '</div>';
+    box.appendChild(div);
+  });
+  box.querySelectorAll("[data-act]").forEach(b => b.onclick = () => reviewAction(b.dataset.act, b.dataset.id, b.dataset.label));
+  box.querySelectorAll("select[data-field]").forEach(s => s.onchange = () => { const q = reviewItems.find(x=>x.id===s.dataset.id); if(q) q[s.dataset.field]=s.value; });
+}
+function reviewAction(act, id, label){
+  const q = reviewItems.find(x=>x.id===id); if(!q) return;
+  if (act==="pick"){ q.answerLabel = label; q.answerSource = "teacher_manual"; q.confidence = 1; }
+  if (act==="ai"){
+    const key = Object.keys(AI_KEYS).find(k => (q.stem+" "+q.options.map(o=>o.text).join(" ")).toLowerCase().includes(k));
+    q.answerLabel = key ? AI_KEYS[key] : q.options[0].label;
+    q.answerSource = "ai_solved"; q.confidence = key ? 0.88 : 0.62;
+    q.explanation = "[Mô phỏng prototype] AI chọn " + q.answerLabel + " kèm lời giải. Ở bản thật, lời giải này do AI sinh và giáo viên phải kiểm tra trước khi duyệt." + (q.confidence<0.70 ? " Độ tin cậy thấp (<0.70) — cần kiểm tra kỹ." : "");
+  }
+  if (act==="approve"){ if(!q.answerLabel) return; bankItems.push(q); reviewItems = reviewItems.filter(x=>x.id!==id); renderBank(); }
+  if (act==="reject"){ reviewItems = reviewItems.filter(x=>x.id!==id); }
+  renderReview(); updateCounts();
+}
+function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+// ---------- Bank ----------
+function renderBank(){
+  const box = $("#bankList"); updateCounts();
+  const s = ($("#fSearch").value||"").toLowerCase(), t = $("#fType").value, d = $("#fDiff").value, u = $("#fUnit").value;
+  const list = bankItems.filter(q => (!t||q.type===t)&&(!d||q.difficulty===d)&&(!u||q.unit===u)&&(!s||(q.stem+" "+q.options.map(o=>o.text).join(" ")).toLowerCase().includes(s)));
+  if (!bankItems.length) { box.innerHTML = '<p class="hint">Kho đang trống. Duyệt câu ở tab 2 để đưa vào kho.</p>'; return; }
+  box.innerHTML = list.length ? list.map(q=>'<div class="q"><b>'+escapeHtml(q.stem)+'</b><div class="row" style="margin-top:6px"><span class="badge b-ok">approved — đáp án '+q.answerLabel+'</span><span class="badge b-none">'+q.type+'</span><span class="badge b-none">'+q.difficulty+'</span><span class="badge b-none">'+escapeHtml(q.unit)+'</span>'+sourceBadge(q.answerSource)+'</div></div>').join("") : '<p class="hint">Không có câu nào khớp bộ lọc.</p>';
+}
+["fSearch","fType","fDiff","fUnit"].forEach(id=>{ $("#"+id).addEventListener("input", renderBank); $("#"+id).addEventListener("change", renderBank); });
+
+// ---------- Builder ----------
+$("#btnGenerate").onclick = () => {
+  const need = parseInt($("#tpl").value,10), vers = parseInt($("#verCount").value,10);
+  const box = $("#genResult");
+  if (bankItems.length < need) { box.innerHTML = '<p class="warn"><b>Không đủ câu approved để sinh đề:</b> cần '+need+' câu, kho mới có '+bankItems.length+' câu. Hãy duyệt thêm '+(need-bankItems.length)+' câu ở tab 2. Hệ thống không sinh đề thiếu.</p>'; lastGenerated=[]; return; }
+  lastGenerated = [];
+  let html = "";
+  for (let v=0; v<vers; v++){
+    const shuffled = [...bankItems].sort(()=>Math.random()-0.5).slice(0,need);
+    const code = 101+v; lastGenerated.push({code, items:shuffled});
+    html += '<div class="q"><h3 style="margin:0 0 8px">Mã đề '+code+'</h3>' + shuffled.map((q,i)=>'<p style="margin:6px 0"><b>Câu '+(i+1)+':</b> '+escapeHtml(q.stem)+'<br><span class="small">'+q.options.map(o=>o.label+". "+escapeHtml(o.text)).join(" &nbsp; ")+' &nbsp;|&nbsp; Đáp án: <b>'+q.answerLabel+'</b></span></p>').join("") + '</div>';
+  }
+  box.innerHTML = html;
+};
+$("#btnPrint").onclick = () => { if(!lastGenerated.length){ alert("Hãy sinh đề trước."); return; } window.print(); };
+
+// ---------- Tabs / counts ----------
+function switchTab(name){
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active", b.dataset.tab===name));
+  ["import","review","bank","builder"].forEach(t=>$("#tab-"+t).classList.toggle("hidden", t!==name));
+  if (name==="bank") renderBank();
+}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+function updateCounts(){ $("#reviewCount").textContent = reviewItems.length ? "("+reviewItems.length+")" : ""; $("#bankCount").textContent = bankItems.length ? "("+bankItems.length+")" : ""; }
+</script>
+</body>
+</html>

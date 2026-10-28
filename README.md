@@ -1,0 +1,33 @@
+# ExamBank AI — Ngân hàng đề Tiếng Anh THPT
+
+Xây từ gốc: Bước 1 Dữ liệu (`docs/01-foundation-database-api.md`) →
+Bước 2 Prototype (`docs/02-prototype-spec.md`, bản chạy được ở `prototype/index.html`) →
+Bước 3 Lộ trình MVP (`docs/03-mvp-roadmap-4-weeks.md`, backlog `docs/03-backlog.csv`).
+
+## Chạy hệ thống (5 dòng)
+
+```bash
+cp .env.example .env
+docker compose up --build
+# Web:  http://localhost:3000
+# API:  http://localhost:8000/health  |  Swagger: http://localhost:8000/docs
+# MinIO console: http://localhost:9001
+```
+
+API tự chạy `alembic upgrade head` khi khởi động (tạo đủ 15 bảng theo Bước 1).
+
+## Chạy migration thủ công (ngoài Docker)
+
+```bash
+cd apps/api
+pip install -r requirements.txt
+DATABASE_URL=postgresql+psycopg://exambank:exambank_dev@localhost:5432/exambank alembic upgrade head
+alembic downgrade base   # gỡ toàn bộ schema
+```
+
+## Trạng thái thi công
+
+- [x] EB-101 Repo + Docker Compose 6 service (web, api, worker, db, redis, minio)
+- [x] EB-102 SQLAlchemy models + Alembic migration #1 (15 bảng)
+- [ ] EB-103 Seed taxonomy — task tiếp theo
+- [ ] EB-104 Auth JWT + Workspace
