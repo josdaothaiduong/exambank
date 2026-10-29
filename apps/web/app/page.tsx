@@ -145,6 +145,81 @@ export default function Home() {
   }, [wsId]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === "builder") loadTemplates(); }, [tab, loadTemplates]);
 
+  // ===== Mẫu đề tự chế =====
+  interface TplSectionForm { name: string; question_type: string; question_count: number; with_passage: boolean; nb: string; th: string; vd: string; vdc: string }
+  const [qtypes, setQtypes] = useState<Tag[]>([]);
+  const [avail, setAvail] = useState<Record<string, { standalone: number; with_passage: number; total: number }>>({});
+  const [editTplId, setEditTplId] = useState<string | null>(null);
+  const [tplName, setTplName] = useState("");
+  const [tplGrade, setTplGrade] = useState("");
+  const [tplDuration, setTplDuration] = useState(30);
+  const [tplSections, setTplSections] = useState<TplSectionForm[]>([
+    { name: "Phần 1", question_type: "grammar_mc", question_count: 5, with_passage: false, nb: "", th: "", vd: "", vdc: "" },
+  ]);
+  const PASSAGE_TYPES = ["cloze", "reading_comprehension", "reading_announcement"];
+
+  const loadAvail = useCallback(() => {
+    if (!wsId) return;
+    api<{ items: { question_type: string; standalone: number; with_passage: number; total: number }[] }>(
+      `/api/v1/exam-templates/availability?workspace_id=${wsId}`)
+      .then((r) => setAvail(Object.fromEntries(r.items.map((a) => [a.question_type, a]))))
+      .catch(() => {});
+    api<Tag[]>(`/api/v1/tags?kind=question_type`).then(setQtypes).catch(() => {});
+  }, [wsId]);
+  useEffect(() => { if (tab === "builder") loadAvail(); }, [tab, loadAvail]);
+
+  function setSection(i: number, patch: Partial<TplSectionForm>) {
+    setTplSections((prev) => prev.map((s, j) => {
+      if (j !== i) return s;
+      const next = { ...s, ...patch };
+      if (patch.question_type) next.with_passage = PASSAGE_TYPES.includes(patch.question_type);
+      return next;
+    }));
+  }
+
+  async function saveTemplate() {
+    const payload = {
+      workspace_id: wsId, name: tplName || "Mẫu chưa đặt tên",
+      grade: tplGrade ? Number(tplGrade) : undefined, duration_minutes: tplDuration,
+      sections: tplSections.map((s) => ({
+        name: s.name, question_type: s.question_type, question_count: s.question_count,
+        with_passage: s.with_passage,
+        difficulty_mix: Object.fromEntries(
+          ([["NB", s.nb], ["TH", s.th], ["VD", s.vd], ["VDC", s.vdc]] as [string, string][])
+            .filter(([, v]) => v !== "" && Number(v) > 0)
+            .map(([k, v]) => [k, Number(v) / 100])),
+      })),
+    };
+    try {
+      const saved = editTplId
+        ? await api<ExamTemplate>(`/api/v1/exam-templates/${editTplId}`, { method: "PUT", body: JSON.stringify(payload) })
+        : await api<ExamTemplate>(`/api/v1/exam-templates`, { method: "POST", body: JSON.stringify(payload) });
+      setEditTplId(null); setTplName("");
+      loadTemplates(); setGenTplId(saved.id);
+    } catch (e: any) { setError(e.message); }
+  }
+
+  function editTemplate(tp: ExamTemplate) {
+    setEditTplId(tp.id); setTplName(tp.name);
+    setTplGrade(tp.grade ? String(tp.grade) : ""); setTplDuration(tp.duration_minutes);
+    setTplSections(tp.sections.map((s) => ({
+      name: s.name, question_type: s.question_type, question_count: s.question_count,
+      with_passage: !!s.passage_type,
+      nb: s.difficulty_mix?.NB ? String(Math.round(s.difficulty_mix.NB * 100)) : "",
+      th: s.difficulty_mix?.TH ? String(Math.round(s.difficulty_mix.TH * 100)) : "",
+      vd: s.difficulty_mix?.VD ? String(Math.round(s.difficulty_mix.VD * 100)) : "",
+      vdc: s.difficulty_mix?.VDC ? String(Math.round(s.difficulty_mix.VDC * 100)) : "",
+    })));
+  }
+
+  async function removeTemplate(tp: ExamTemplate) {
+    if (!window.confirm(`Xoá mẫu "${tp.name}"?`)) return;
+    try {
+      await api(`/api/v1/exam-templates/${tp.id}`, { method: "DELETE" });
+      loadTemplates();
+    } catch (e: any) { setError(e.message); }
+  }
+
   async function doGenerate() {
     setGenShortfall(""); setGenExam(null);
     try {
@@ -464,6 +539,53 @@ export default function Home() {
 
       {tab === "builder" && (
         <section>
+          <div style={{ ...box, marginBottom: 12 }}>
+            <b>Mẫu đề của tôi</b>
+            <span style={{ color: "#53627f", fontSize: 13 }}> — tự dựng mẫu theo đúng kho câu của bạn. Số liệu "kho có" là câu đã duyệt + có đáp án.</span>
+            {templates.filter((tp) => !tp.is_system).map((tp) => (
+              <div key={tp.id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, fontSize: 14 }}>
+                <span style={{ flex: 1 }}><b>{tp.name}</b> · {tp.total_questions} câu · {tp.duration_minutes} phút</span>
+                <button style={btn} onClick={() => editTemplate(tp)}>Sửa</button>
+                <button style={btn} onClick={() => removeTemplate(tp)}>Xoá</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+              <input placeholder="Tên mẫu, VD: Đề ôn Unit 3 — lớp 12" value={tplName} onChange={(e) => setTplName(e.target.value)} style={{ padding: 9, flex: 2 }} />
+              <select value={tplGrade} onChange={(e) => setTplGrade(e.target.value)} style={{ padding: 9 }}>
+                <option value="">Mọi khối</option><option value="10">Lớp 10</option><option value="11">Lớp 11</option><option value="12">Lớp 12</option>
+              </select>
+              <label style={{ fontSize: 13 }}>Thời gian (phút) <input type="number" min={1} value={tplDuration} onChange={(e) => setTplDuration(Number(e.target.value))} style={{ padding: 8, width: 70 }} /></label>
+            </div>
+            {tplSections.map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8, background: "#f6f8fc", borderRadius: 8, padding: 8 }}>
+                <input value={s.name} onChange={(e) => setSection(i, { name: e.target.value })} style={{ padding: 8, flex: 1 }} placeholder="Tên phần" />
+                <select value={s.question_type} onChange={(e) => setSection(i, { question_type: e.target.value })} style={{ padding: 8 }}>
+                  {qtypes.map((qt) => (<option key={qt.id} value={qt.code}>{qt.label}</option>))}
+                </select>
+                <span style={{ fontSize: 12, color: "#53627f" }}>
+                  kho có: {avail[s.question_type] ? `${avail[s.question_type].standalone} độc lập · ${avail[s.question_type].with_passage} gắn đoạn` : "0 câu"}
+                </span>
+                <label style={{ fontSize: 13 }}>Số câu <input type="number" min={1} value={s.question_count} onChange={(e) => setSection(i, { question_count: Number(e.target.value) })} style={{ padding: 7, width: 60 }} /></label>
+                <label style={{ fontSize: 13 }}><input type="checkbox" checked={s.with_passage} onChange={(e) => setSection(i, { with_passage: e.target.checked })} /> Gắn đoạn văn</label>
+                <span style={{ fontSize: 12, color: "#53627f" }}>% NB/TH/VD/VDC:</span>
+                {(["nb", "th", "vd", "vdc"] as const).map((k) => (
+                  <input key={k} value={s[k]} onChange={(e) => setSection(i, { [k]: e.target.value } as Partial<TplSectionForm>)}
+                    style={{ padding: 7, width: 44 }} placeholder={k.toUpperCase()} />
+                ))}
+                <button style={btn} onClick={() => setTplSections((prev) => prev.filter((_, j) => j !== i))}>✕</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button style={btn} onClick={() => setTplSections((prev) => [...prev, { name: `Phần ${prev.length + 1}`, question_type: "vocabulary_mc", question_count: 5, with_passage: false, nb: "", th: "", vd: "", vdc: "" }])}>+ Thêm phần</button>
+              <button style={{ padding: "8px 14px", background: "#12703a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={saveTemplate}>
+                {editTplId ? "Lưu thay đổi" : "Lưu mẫu mới"}
+              </button>
+              {editTplId && <button style={btn} onClick={() => setEditTplId(null)}>Huỷ sửa</button>}
+              <span style={{ fontSize: 13, color: "#53627f", alignSelf: "center" }}>
+                Tổng: {tplSections.reduce((a, s) => a + (s.question_count || 0), 0)} câu · Để trống % độ khó = lấy mọi mức
+              </span>
+            </div>
+          </div>
           <div style={{ ...box, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <select value={genTplId} onChange={(e) => setGenTplId(e.target.value)} style={{ padding: 9, flex: 2 }}>
               {templates.map((tp) => (<option key={tp.id} value={tp.id}>{tp.name} — {tp.duration_minutes} phút</option>))}
