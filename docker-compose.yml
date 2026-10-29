@@ -24,6 +24,10 @@ services:
       retries: 10
 
   minio:
+    # MinIO đã gỡ image khỏi Docker Hub (404, kiểm chứng 2026-10-30) và code
+    # hiện chưa dùng S3 (upload đọc thẳng vào bộ nhớ) -> để dạng opt-in profile,
+    # `docker compose up` mặc định sẽ bỏ qua, không kéo image này nữa.
+    profiles: ["storage"]
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
