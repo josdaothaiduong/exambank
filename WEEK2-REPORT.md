@@ -32,7 +32,10 @@ không có dấu hiệu mạnh hơn). Kiểm chứng: 5 test hồi quy mới —
 - Import hiện chạy đồng bộ trong request (đủ nhanh với đề ≤ vài trăm câu); chuyển Celery bất đồng bộ để ở Tuần 3 cùng pipeline AI.
 
 ## Nợ kỹ thuật / giới hạn còn mở
-1. EB-207 chờ 5 file đề thật từ giáo viên để đo trên dữ liệu thật (fixture hiện đạt 100% nhưng chưa đại diện hết các biến thể Word ngoài đời).
+1. ~~EB-207 chờ 5 file đề thật~~ — ĐÃ ĐÓNG 2026-10-29: Ha gửi đủ 5 đề thật (3 docx + 2 pdf).
+   Sau tinh chỉnh: K12 40/40 câu + 40/40 đáp án đỏ; UNIT_5 40/40 + 40/40 highlight;
+   UNIT_3 148/148 câu, 0 đáp án bịa; 2 PDF 40/40 câu qua trích text. Chi tiết tại
+   `WEEK2-REAL-EXAMS-REPORT.md`. File gốc của giáo viên KHÔNG commit vào git.
 2. Import đồng bộ — đề rất lớn (>500 câu) nên chuyển nền ở Tuần 3.
 3. Cảnh báo deprecation pydantic-settings ở `app/config.py` vẫn còn (không chặn).
 4. Máy hiện tại vẫn không có Docker — kiểm chứng thay bằng SQLite + uvicorn thật như Tuần 1.

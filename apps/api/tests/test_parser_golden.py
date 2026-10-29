@@ -13,6 +13,9 @@ EXPECTED = {
     "exam3_noanswer_key.html": (3, {1: ("A", "answer_key_table"), 2: ("A", "answer_key_table"), 3: ("B", "answer_key_table")}, 0),
     "exam4_cloze.html": (3, {}, 1),
     "exam5_mixed_bold.html": (3, {1: ("B", "bold_underline"), 2: ("A", "bold_underline")}, 0),
+    # exam6: định dạng rút từ 5 đề thật Ha gửi 2026-10-29 — header "Question 1." dấu chấm,
+    # đỏ biến thể #ee0000, highlight bị cắt run vụn ("B" "." "with"), section mới nối đuôi câu trước
+    "exam6_real_formats.html": (3, {1: ("C", "red_text"), 2: ("B", "highlight"), 3: ("B", "red_text")}, 2),
 }
 
 

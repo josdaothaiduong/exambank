@@ -48,7 +48,7 @@ def test_passage_and_stem_preserve_emphasis_no_marker_leak():
 def test_span_style_bold_answer_detected():
     out = parse_exam_html(EMPHASIS_HTML)
     det = out["questions"][1]["detected_answer"]
-    assert det == {"label": "C", "source": "bold_underline", "confidence": 0.8}
+    assert det == {"label": "C", "source": "bold_underline", "confidence": 0.65}
 
 
 def test_bold_only_in_stem_does_not_fabricate_answer():

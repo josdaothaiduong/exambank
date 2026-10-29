@@ -24,16 +24,18 @@ def import_html(db: Session, exam: SourceExam, html: str, created_by) -> ImportJ
 
     parsed = parse_exam_html(clean_html)
 
-    passage = None
-    if parsed["passages"]:
-        p = parsed["passages"][0]
-        passage = PassageGroup(
+    # Mỗi section trong đề thật có passage riêng — tạo 1 PassageGroup cho mỗi passage,
+    # câu hỏi gắn đúng passage qua passage_temp_id của parser.
+    passage_by_temp: dict[str, PassageGroup] = {}
+    for p in parsed["passages"]:
+        pg = PassageGroup(
             source_exam_id=exam.id, workspace_id=exam.workspace_id,
             passage_type=p["passage_type"], content_html=p.get("content_html") or p["content_text"],
             content_text=p["content_text"],
         )
-        db.add(passage)
+        db.add(pg)
         db.flush()
+        passage_by_temp[p["temp_id"]] = pg
 
     stats = {"total": 0, "with_answer": 0, "needs_answer": 0, "duplicates": 0, "failed": 0}
     errors = []
@@ -55,7 +57,7 @@ def import_html(db: Session, exam: SourceExam, html: str, created_by) -> ImportJ
         det = q["detected_answer"]
         item = QuestionItem(
             workspace_id=exam.workspace_id, source_exam_id=exam.id,
-            passage_id=passage.id if passage else None,
+            passage_id=(passage_by_temp[q["passage_temp_id"]].id if q.get("passage_temp_id") else None),
             question_type=q["question_type"], order_in_source=q["number"],
             stem_html=q.get("stem_html") or q["stem"], stem_text=q["stem"],
             status=QuestionStatus.pending_review if det else QuestionStatus.needs_answer,
