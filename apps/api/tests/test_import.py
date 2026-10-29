@@ -45,7 +45,7 @@ def test_import_red_stats_and_raw_html_saved(ctx):
     html = (GOLDEN / "exam1_red.html").read_text()
     out = import_paste(ctx["exam_id"], PasteIn(html=html), db=ctx["db"], user=ctx["ua"])
     assert out["status"] == "done"
-    assert out["stats"] == {"total": 4, "with_answer": 4, "needs_answer": 0, "duplicates": 0, "overwritten": 0, "failed": 0}
+    assert out["stats"] == {"total": 4, "with_answer": 4, "needs_answer": 0, "duplicates": 0, "overwritten": 0, "failed": 0, "near_duplicates": 0}
     exam = ctx["db"].get(SourceExam, ctx["exam_id"])
     assert exam.raw_html and "color" in exam.raw_html  # EB-201: raw_html đã sanitize vẫn giữ tín hiệu đỏ
     q = review_queue(ctx["exam_id"], db=ctx["db"], user=ctx["ua"])

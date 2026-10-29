@@ -50,11 +50,12 @@ export interface Tag { id: string; kind: string; code: string; label: string }
 export interface QuestionItem {
   id: string; question_type: string; stem_text: string; status: string;
   difficulty: string | null; answer_source: string; answer_confidence: number | null;
-  correct_option_id: string | null; stem_html?: string; passage_text?: string | null; passage_html?: string | null; tags: string[];
+  correct_option_id: string | null; stem_html?: string;
+  ai_solution?: { model: string; confidence: number; explanation_html: string | null; suggested_difficulty: string | null; suggested_tags: string[] } | null; passage_text?: string | null; passage_html?: string | null; tags: string[];
   options: { id: string; label: string; content_text: string; content_html?: string }[];
 }
-export interface ImportStats { total: number; with_answer: number; needs_answer: number; duplicates: number; overwritten: number; failed: number }
-export interface ImportResult { import_job_id: string; status: string; stats: ImportStats; error_log: unknown[] }
+export interface ImportStats { near_duplicates?: number; total: number; with_answer: number; needs_answer: number; duplicates: number; overwritten: number; failed: number }
+export interface ImportResult { import_job_id: string; status: string; stats: ImportStats; error_log: unknown[]; near_duplicates?: { number: number; stem_text: string; similarity: number }[] }
 export interface DupOption { label: string; content_text: string }
 export interface DuplicateComparison {
   dedup_hash: string; number: number;
@@ -66,4 +67,5 @@ export interface ConflictResult {
   duplicate_count: number; new_count: number; duplicates: DuplicateComparison[];
 }
 export interface ReviewQueue { items: QuestionItem[]; total: number }
+export interface SolveResult { mode: string; provider: string; model: string; total: number; solved: number; failed: number; low_confidence: number; cost_usd: number }
 export interface QuestionPage { items: QuestionItem[]; total: number; page: number; page_size: number }

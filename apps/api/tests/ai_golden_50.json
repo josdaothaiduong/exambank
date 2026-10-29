@@ -1,0 +1,1306 @@
+{
+ "source": "UNIT_3_CITIES_OF_THE_FUTURE.docx (đề thật của Ha)",
+ "answer_key_note": "Đáp án chuẩn do Muse giải và đối chiếu ngữ cảnh từng câu 2026-10-29; Ha có thể kiểm chứng lại bất kỳ câu nào.",
+ "items": [
+  {
+   "id": "U3-G01",
+   "source_index": 0,
+   "type": "vocabulary_mc",
+   "stem": "During rush hour, smart lights remain useful only when __________ becomes steadier near crowded school gates.",
+   "options": [
+    {
+     "label": "A",
+     "text": "traffic flow"
+    },
+    {
+     "label": "B",
+     "text": "roof garden"
+    },
+    {
+     "label": "C",
+     "text": "card reader"
+    },
+    {
+     "label": "D",
+     "text": "carbon footprint"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G02",
+   "source_index": 3,
+   "type": "vocabulary_mc",
+   "stem": "Cleaner parks and faster trams improve __________, which matters when families choose future homes downtown.",
+   "options": [
+    {
+     "label": "A",
+     "text": "natural disaster"
+    },
+    {
+     "label": "B",
+     "text": "traffic jam"
+    },
+    {
+     "label": "C",
+     "text": "personal information"
+    },
+    {
+     "label": "D",
+     "text": "quality of life"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G03",
+   "source_index": 6,
+   "type": "vocabulary_mc",
+   "stem": "Schools with solar panels depend less on diesel because they use more __________ during sunny afternoons.",
+   "options": [
+    {
+     "label": "A",
+     "text": "greenhouse gas"
+    },
+    {
+     "label": "B",
+     "text": "renewable energy"
+    },
+    {
+     "label": "C",
+     "text": "private vehicle"
+    },
+    {
+     "label": "D",
+     "text": "traffic jam"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G04",
+   "source_index": 9,
+   "type": "vocabulary_mc",
+   "stem": "The factory’s latest __________ remains higher than the clean target set by officials near the river district.",
+   "options": [
+    {
+     "label": "A",
+     "text": "exhibition"
+    },
+    {
+     "label": "B",
+     "text": "appointment"
+    },
+    {
+     "label": "C",
+     "text": "refund"
+    },
+    {
+     "label": "D",
+     "text": "emission"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G05",
+   "source_index": 12,
+   "type": "vocabulary_mc",
+   "stem": "Living near an __________ sounds convenient, although rent is often higher than in distant suburbs.",
+   "options": [
+    {
+     "label": "A",
+     "text": "urban centre"
+    },
+    {
+     "label": "B",
+     "text": "roof garden"
+    },
+    {
+     "label": "C",
+     "text": "security camera"
+    },
+    {
+     "label": "D",
+     "text": "private vehicle"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G06",
+   "source_index": 15,
+   "type": "vocabulary_mc",
+   "stem": "Residents believe __________ matters more when smart apartments collect daily movement data through hidden sensors.",
+   "options": [
+    {
+     "label": "A",
+     "text": "efficiency"
+    },
+    {
+     "label": "B",
+     "text": "privacy"
+    },
+    {
+     "label": "C",
+     "text": "population"
+    },
+    {
+     "label": "D",
+     "text": "convenience"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G07",
+   "source_index": 18,
+   "type": "vocabulary_mc",
+   "stem": "A __________ seems practical for quiet suburbs where late-night passengers need reliable transport home safely.",
+   "options": [
+    {
+     "label": "A",
+     "text": "card reader"
+    },
+    {
+     "label": "B",
+     "text": "driverless bus"
+    },
+    {
+     "label": "C",
+     "text": "roof garden"
+    },
+    {
+     "label": "D",
+     "text": "security alarm"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G08",
+   "source_index": 21,
+   "type": "vocabulary_mc",
+   "stem": "Stronger flood gates help coastal cities recover faster after a __________ hits low areas suddenly.",
+   "options": [
+    {
+     "label": "A",
+     "text": "natural disaster"
+    },
+    {
+     "label": "B",
+     "text": "traffic flow"
+    },
+    {
+     "label": "C",
+     "text": "card reader"
+    },
+    {
+     "label": "D",
+     "text": "private vehicle"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G09",
+   "source_index": 24,
+   "type": "vocabulary_mc",
+   "stem": "A wider __________ encourages families to walk instead of making short car trips to nearby shops.",
+   "options": [
+    {
+     "label": "A",
+     "text": "bus shelter"
+    },
+    {
+     "label": "B",
+     "text": "parking meter"
+    },
+    {
+     "label": "C",
+     "text": "green corridor"
+    },
+    {
+     "label": "D",
+     "text": "bicycle lock"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G10",
+   "source_index": 27,
+   "type": "vocabulary_mc",
+   "stem": "Urban parks matter because they directly improve residents’ __________ during hotter and noisier summers downtown.",
+   "options": [
+    {
+     "label": "A",
+     "text": "cybercrime"
+    },
+    {
+     "label": "B",
+     "text": "living conditions"
+    },
+    {
+     "label": "C",
+     "text": "appointment"
+    },
+    {
+     "label": "D",
+     "text": "refund"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G11",
+   "source_index": 30,
+   "type": "vocabulary_mc",
+   "stem": "Transport apps can __________ route updates during storms, so commuters receive clear guidance before leaving stations.",
+   "options": [
+    {
+     "label": "A",
+     "text": "warn commuters with"
+    },
+    {
+     "label": "B",
+     "text": "replace commuters with"
+    },
+    {
+     "label": "C",
+     "text": "provide commuters with"
+    },
+    {
+     "label": "D",
+     "text": "cover commuters with"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G12",
+   "source_index": 33,
+   "type": "vocabulary_mc",
+   "stem": "Every city dweller should have __________ to clean parks, not only wealthy residents in central districts.",
+   "options": [
+    {
+     "label": "A",
+     "text": "account"
+    },
+    {
+     "label": "B",
+     "text": "attention"
+    },
+    {
+     "label": "C",
+     "text": "control"
+    },
+    {
+     "label": "D",
+     "text": "access"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G13",
+   "source_index": 36,
+   "type": "grammar_mc",
+   "stem": "Future trams should be powered __________ clean energy, not diesel engines in residential areas anymore.",
+   "options": [
+    {
+     "label": "A",
+     "text": "for"
+    },
+    {
+     "label": "B",
+     "text": "with"
+    },
+    {
+     "label": "C",
+     "text": "at"
+    },
+    {
+     "label": "D",
+     "text": "by"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G14",
+   "source_index": 39,
+   "type": "vocabulary_mc",
+   "stem": "Charging points should be made __________ for taxi drivers before petrol bans begin next year.",
+   "options": [
+    {
+     "label": "A",
+     "text": "crowded"
+    },
+    {
+     "label": "B",
+     "text": "responsible"
+    },
+    {
+     "label": "C",
+     "text": "available"
+    },
+    {
+     "label": "D",
+     "text": "wasteful"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G15",
+   "source_index": 42,
+   "type": "vocabulary_mc",
+   "stem": "Paper tickets are being __________ with digital cards at most new tram stations this year.",
+   "options": [
+    {
+     "label": "A",
+     "text": "replaced"
+    },
+    {
+     "label": "B",
+     "text": "powered"
+    },
+    {
+     "label": "C",
+     "text": "covered"
+    },
+    {
+     "label": "D",
+     "text": "warned"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G16",
+   "source_index": 45,
+   "type": "vocabulary_mc",
+   "stem": "Experts __________ residents about fake city apps that may steal personal information during online payments.",
+   "options": [
+    {
+     "label": "A",
+     "text": "warn"
+    },
+    {
+     "label": "B",
+     "text": "provide"
+    },
+    {
+     "label": "C",
+     "text": "unlock"
+    },
+    {
+     "label": "D",
+     "text": "install"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G17",
+   "source_index": 48,
+   "type": "vocabulary_mc",
+   "stem": "More families will __________ using public transport if trains feel cleaner and less crowded daily.",
+   "options": [
+    {
+     "label": "A",
+     "text": "move away from"
+    },
+    {
+     "label": "B",
+     "text": "think of"
+    },
+    {
+     "label": "C",
+     "text": "warn against"
+    },
+    {
+     "label": "D",
+     "text": "run on"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G18",
+   "source_index": 51,
+   "type": "vocabulary_mc",
+   "stem": "Driverless buses are __________ to replace empty night routes, according to the latest transport report.",
+   "options": [
+    {
+     "label": "A",
+     "text": "visible"
+    },
+    {
+     "label": "B",
+     "text": "uneven"
+    },
+    {
+     "label": "C",
+     "text": "likely"
+    },
+    {
+     "label": "D",
+     "text": "nervous"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G19",
+   "source_index": 54,
+   "type": "vocabulary_mc",
+   "stem": "City forums discuss the __________ and cons of facial-recognition cameras before voting online this month.",
+   "options": [
+    {
+     "label": "A",
+     "text": "risks"
+    },
+    {
+     "label": "B",
+     "text": "facts"
+    },
+    {
+     "label": "C",
+     "text": "pros"
+    },
+    {
+     "label": "D",
+     "text": "ways"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G20",
+   "source_index": 57,
+   "type": "grammar_mc",
+   "stem": "The station includes a __________ where commuters can charge phones and check routes during delays.",
+   "options": [
+    {
+     "label": "A",
+     "text": "transport solar-powered public hub"
+    },
+    {
+     "label": "B",
+     "text": "public hub solar-powered transport"
+    },
+    {
+     "label": "C",
+     "text": "hub public transport solar-powered"
+    },
+    {
+     "label": "D",
+     "text": "solar-powered public transport hub"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G21",
+   "source_index": 60,
+   "type": "grammar_mc",
+   "stem": "Developers planned a __________ for young workers who prefer smaller homes near stations in urban districts.",
+   "options": [
+    {
+     "label": "A",
+     "text": "apartment eco-friendly compact block"
+    },
+    {
+     "label": "B",
+     "text": "compact block eco-friendly apartment"
+    },
+    {
+     "label": "C",
+     "text": "block compact eco-friendly apartment"
+    },
+    {
+     "label": "D",
+     "text": "compact eco-friendly apartment block"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G22",
+   "source_index": 63,
+   "type": "grammar_mc",
+   "stem": "The school created a __________ where students learn biology and food sustainability after classes weekly.",
+   "options": [
+    {
+     "label": "A",
+     "text": "rooftop shared farming space"
+    },
+    {
+     "label": "B",
+     "text": "shared rooftop farming space"
+    },
+    {
+     "label": "C",
+     "text": "farming shared rooftop space"
+    },
+    {
+     "label": "D",
+     "text": "space shared rooftop farming"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G23",
+   "source_index": 66,
+   "type": "grammar_mc",
+   "stem": "Not every __________ change improves city life; some tools create new privacy risks for residents.",
+   "options": [
+    {
+     "label": "A",
+     "text": "technology"
+    },
+    {
+     "label": "B",
+     "text": "technologically"
+    },
+    {
+     "label": "C",
+     "text": "technologist"
+    },
+    {
+     "label": "D",
+     "text": "technological"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G24",
+   "source_index": 69,
+   "type": "grammar_mc",
+   "stem": "Online ticket refunds add __________ for passengers whose trams are delayed during rush hour storms.",
+   "options": [
+    {
+     "label": "A",
+     "text": "convenient"
+    },
+    {
+     "label": "B",
+     "text": "conveniently"
+    },
+    {
+     "label": "C",
+     "text": "inconvenient"
+    },
+    {
+     "label": "D",
+     "text": "convenience"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G25",
+   "source_index": 72,
+   "type": "grammar_mc",
+   "stem": "Many visitors were impressed __________ the exhibition because it felt realistic and interactive downtown today.",
+   "options": [
+    {
+     "label": "A",
+     "text": "by"
+    },
+    {
+     "label": "B",
+     "text": "to"
+    },
+    {
+     "label": "C",
+     "text": "for"
+    },
+    {
+     "label": "D",
+     "text": "on"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G26",
+   "source_index": 75,
+   "type": "grammar_mc",
+   "stem": "More public bikes were made available __________ commuters after the bridge repair finished on Monday.",
+   "options": [
+    {
+     "label": "A",
+     "text": "with"
+    },
+    {
+     "label": "B",
+     "text": "for"
+    },
+    {
+     "label": "C",
+     "text": "at"
+    },
+    {
+     "label": "D",
+     "text": "by"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G27",
+   "source_index": 78,
+   "type": "grammar_mc",
+   "stem": "The app, __________ includes real-time warnings, helps commuters avoid flooded streets during sudden storms downtown.",
+   "options": [
+    {
+     "label": "A",
+     "text": "who"
+    },
+    {
+     "label": "B",
+     "text": "where"
+    },
+    {
+     "label": "C",
+     "text": "which"
+    },
+    {
+     "label": "D",
+     "text": "whose"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G28",
+   "source_index": 81,
+   "type": "synonym",
+   "stem": "Many future cities are developing sustainable housing projects that use less energy and produce less waste.",
+   "options": [
+    {
+     "label": "A",
+     "text": "affordable"
+    },
+    {
+     "label": "B",
+     "text": "eco-friendly"
+    },
+    {
+     "label": "C",
+     "text": "highly advanced"
+    },
+    {
+     "label": "D",
+     "text": "state-funded"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G29",
+   "source_index": 84,
+   "type": "synonym",
+   "stem": "In the future, residents may rely on driverless buses for daily travel instead of private cars.",
+   "options": [
+    {
+     "label": "A",
+     "text": "pay for"
+    },
+    {
+     "label": "B",
+     "text": "switch to"
+    },
+    {
+     "label": "C",
+     "text": "depend on"
+    },
+    {
+     "label": "D",
+     "text": "benefit from"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G30",
+   "source_index": 87,
+   "type": "synonym",
+   "stem": "Some cities plan to curb the number of private vehicles in the city centre to reduce pollution.",
+   "options": [
+    {
+     "label": "A",
+     "text": "limit"
+    },
+    {
+     "label": "B",
+     "text": "count"
+    },
+    {
+     "label": "C",
+     "text": "replace"
+    },
+    {
+     "label": "D",
+     "text": "manage"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G31",
+   "source_index": 90,
+   "type": "synonym",
+   "stem": "Future cities need sustainable transport systems, not projects that save time today but damage the environment for years.",
+   "options": [
+    {
+     "label": "A",
+     "text": "practical"
+    },
+    {
+     "label": "B",
+     "text": "environmentally harmful"
+    },
+    {
+     "label": "C",
+     "text": "long-term"
+    },
+    {
+     "label": "D",
+     "text": "cost-effective"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G32",
+   "source_index": 93,
+   "type": "synonym",
+   "stem": "New buildings use energy-efficient cooling systems that reduce electricity use during heat waves.",
+   "options": [
+    {
+     "label": "A",
+     "text": "low-cost"
+    },
+    {
+     "label": "B",
+     "text": "energy-wasting"
+    },
+    {
+     "label": "C",
+     "text": "solar-powered"
+    },
+    {
+     "label": "D",
+     "text": "high-tech"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G33",
+   "source_index": 96,
+   "type": "synonym",
+   "stem": "Some parking meters will become obsolete when drivers pay through a single city app.",
+   "options": [
+    {
+     "label": "A",
+     "text": "outdated"
+    },
+    {
+     "label": "B",
+     "text": "damaged"
+    },
+    {
+     "label": "C",
+     "text": "up-to-date"
+    },
+    {
+     "label": "D",
+     "text": "unnecessary"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G34",
+   "source_index": 99,
+   "type": "synonym",
+   "stem": "Citizens who adapt to online public services can complete forms without visiting crowded offices.",
+   "options": [
+    {
+     "label": "A",
+     "text": "adjust to"
+    },
+    {
+     "label": "B",
+     "text": "benefit from"
+    },
+    {
+     "label": "C",
+     "text": "refuse to adjust to"
+    },
+    {
+     "label": "D",
+     "text": "learn about"
+    }
+   ],
+   "passage": null,
+   "answer": "A"
+  },
+  {
+   "id": "U3-G35",
+   "source_index": 102,
+   "type": "grammar_mc",
+   "stem": "I __________ this transport plan is safer than the old one for pedestrians.",
+   "options": [
+    {
+     "label": "A",
+     "text": "am thinking"
+    },
+    {
+     "label": "B",
+     "text": "have been thinking"
+    },
+    {
+     "label": "C",
+     "text": "think of"
+    },
+    {
+     "label": "D",
+     "text": "think"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G36",
+   "source_index": 105,
+   "type": "grammar_mc",
+   "stem": "I now __________ why residents dislike cameras near their apartment doors.",
+   "options": [
+    {
+     "label": "A",
+     "text": "am seeing"
+    },
+    {
+     "label": "B",
+     "text": "see"
+    },
+    {
+     "label": "C",
+     "text": "was seeing"
+    },
+    {
+     "label": "D",
+     "text": "have been seeing"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G37",
+   "source_index": 108,
+   "type": "grammar_mc",
+   "stem": "The engineer __________ the water carefully to check whether it is polluted.",
+   "options": [
+    {
+     "label": "A",
+     "text": "smells"
+    },
+    {
+     "label": "B",
+     "text": "is smelling"
+    },
+    {
+     "label": "C",
+     "text": "is smelled"
+    },
+    {
+     "label": "D",
+     "text": "smells like"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G38",
+   "source_index": 111,
+   "type": "grammar_mc",
+   "stem": "The fabric on these smart bus seats __________ rough, so passengers may complain.",
+   "options": [
+    {
+     "label": "A",
+     "text": "is feeling"
+    },
+    {
+     "label": "B",
+     "text": "is felt"
+    },
+    {
+     "label": "C",
+     "text": "feels at"
+    },
+    {
+     "label": "D",
+     "text": "feels"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G39",
+   "source_index": 114,
+   "type": "grammar_mc",
+   "stem": "The engineer __________ at the traffic map to find the cause of the delay.",
+   "options": [
+    {
+     "label": "A",
+     "text": "looks"
+    },
+    {
+     "label": "B",
+     "text": "is looking"
+    },
+    {
+     "label": "C",
+     "text": "is looked"
+    },
+    {
+     "label": "D",
+     "text": "looked like"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G40",
+   "source_index": 117,
+   "type": "grammar_mc",
+   "stem": "This smart card __________ to my brother, so I cannot use it for the tram.",
+   "options": [
+    {
+     "label": "A",
+     "text": "is belonging"
+    },
+    {
+     "label": "B",
+     "text": "was belonging"
+    },
+    {
+     "label": "C",
+     "text": "has belonged as"
+    },
+    {
+     "label": "D",
+     "text": "belongs"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G41",
+   "source_index": 120,
+   "type": "grammar_mc",
+   "stem": "The city __________ more crowded, but many residents still __________ it is liveable.",
+   "options": [
+    {
+     "label": "A",
+     "text": "became / are believing"
+    },
+    {
+     "label": "B",
+     "text": "is becoming / believe"
+    },
+    {
+     "label": "C",
+     "text": "is seeming / believe"
+    },
+    {
+     "label": "D",
+     "text": "becomes / are knowing"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G42",
+   "source_index": 123,
+   "type": "grammar_mc",
+   "stem": "The warning message on the city app sounded __________ to most elderly users.",
+   "options": [
+    {
+     "label": "A",
+     "text": "clearly"
+    },
+    {
+     "label": "B",
+     "text": "clear"
+    },
+    {
+     "label": "C",
+     "text": "clarity"
+    },
+    {
+     "label": "D",
+     "text": "clearable"
+    }
+   ],
+   "passage": null,
+   "answer": "B"
+  },
+  {
+   "id": "U3-G43",
+   "source_index": 126,
+   "type": "grammar_mc",
+   "stem": "The residents are __________ about how their data is stored by the city app.",
+   "options": [
+    {
+     "label": "A",
+     "text": "concerning"
+    },
+    {
+     "label": "B",
+     "text": "concern"
+    },
+    {
+     "label": "C",
+     "text": "concerns"
+    },
+    {
+     "label": "D",
+     "text": "concerned"
+    }
+   ],
+   "passage": null,
+   "answer": "D"
+  },
+  {
+   "id": "U3-G44",
+   "source_index": 129,
+   "type": "grammar_mc",
+   "stem": "In “The streets are becoming safer,” the word “are” is __________.",
+   "options": [
+    {
+     "label": "A",
+     "text": "a main linking verb"
+    },
+    {
+     "label": "B",
+     "text": "a stative verb of possession"
+    },
+    {
+     "label": "C",
+     "text": "an auxiliary verb"
+    },
+    {
+     "label": "D",
+     "text": "an object complement"
+    }
+   ],
+   "passage": null,
+   "answer": "C"
+  },
+  {
+   "id": "U3-G45",
+   "source_index": 132,
+   "type": "cloze",
+   "stem": "Chỗ trống số 3 trong đoạn văn đi kèm",
+   "options": [
+    {
+     "label": "A",
+     "text": "crowded"
+    },
+    {
+     "label": "B",
+     "text": "empty"
+    },
+    {
+     "label": "C",
+     "text": "efficient"
+    },
+    {
+     "label": "D",
+     "text": "renewable"
+    }
+   ],
+   "passage": "These smart cities will be the cities of the future. They will use (1) __________ technologies to improve their infrastructure and services. \n Infrastructure will become more (2) __________ and eco-friendly. This will be achieved by reducing the use of natural resources and the amount of waste. In addition, city dwellers will have access to a transport system that combines different modes of transport such as buses, underground and overground trains, and is (3) __________ and easy to use. Smart cities will also have larger pedestrian zones and more cycle paths. Poor areas will be rebuilt to make all neighbourhoods safer and cleaner. This will provide better living spaces for the growing population and improve people’s (4) __________ of living. \n Most services will be offered online, and will be (5) __________ for everybody to use. People will also be able to give and receive feedback, monitor programmes and activities with the help of virtual tours of worksites. In addition, many health and education services will be (6) __________ online, ensuring a pleasant experience for residents. (7) __________, people will be able to book an appointment to see a doctor online. They will also receive prescriptions and all the necessary documents at home. Improved infrastructure and efficient services will make the cities of the future more (8) __________ and will provide a better quality of life to city dwellers.",
+   "answer": "C"
+  },
+  {
+   "id": "U3-G46",
+   "source_index": 135,
+   "type": "cloze",
+   "stem": "Chỗ trống số 6 trong đoạn văn đi kèm",
+   "options": [
+    {
+     "label": "A",
+     "text": "taken"
+    },
+    {
+     "label": "B",
+     "text": "held"
+    },
+    {
+     "label": "C",
+     "text": "offered"
+    },
+    {
+     "label": "D",
+     "text": "brought"
+    }
+   ],
+   "passage": "These smart cities will be the cities of the future. They will use (1) __________ technologies to improve their infrastructure and services. \n Infrastructure will become more (2) __________ and eco-friendly. This will be achieved by reducing the use of natural resources and the amount of waste. In addition, city dwellers will have access to a transport system that combines different modes of transport such as buses, underground and overground trains, and is (3) __________ and easy to use. Smart cities will also have larger pedestrian zones and more cycle paths. Poor areas will be rebuilt to make all neighbourhoods safer and cleaner. This will provide better living spaces for the growing population and improve people’s (4) __________ of living. \n Most services will be offered online, and will be (5) __________ for everybody to use. People will also be able to give and receive feedback, monitor programmes and activities with the help of virtual tours of worksites. In addition, many health and education services will be (6) __________ online, ensuring a pleasant experience for residents. (7) __________, people will be able to book an appointment to see a doctor online. They will also receive prescriptions and all the necessary documents at home. Improved infrastructure and efficient services will make the cities of the future more (8) __________ and will provide a better quality of life to city dwellers.",
+   "answer": "C"
+  },
+  {
+   "id": "U3-G47",
+   "source_index": 138,
+   "type": "reading_comprehension",
+   "stem": "Where in the passage does the following sentence best fit? \n The risk begins when convenience becomes the city’s favourite excuse.",
+   "options": [
+    {
+     "label": "A",
+     "text": "[I]"
+    },
+    {
+     "label": "B",
+     "text": "[II]"
+    },
+    {
+     "label": "C",
+     "text": "[III]"
+    },
+    {
+     "label": "D",
+     "text": "[IV]"
+    }
+   ],
+   "passage": "At the corner, a sensor changes the traffic light before the junction clogs. A phone warns that the air near the main road is poor, so cyclists take a quieter route. None of this feels dramatic. That is the point. The future city enters daily life not as a shining exhibition, but as small acts of friction removed . \n [I]  The smarter version of a city is not simply one covered with cameras, apps, and computer-controlled systems. Its real promise lies in connecting scattered services so that public transport runs smoothly, energy is used efficiently, and residents have access to safer facilities without navigating a maze of offices. Used well, data can reveal where traffic flow breaks down, where emissions rise, and where a neighbourhood lacks green space. Not only can technology speed up decision making, it can also make old urban neglect harder to hide. \n [II] A security camera may protect a pedestrian zone, but it may also teach people to accept constant monitoring as the price of feeling safe. [III] Predictive tools can help officials plan bus routes, while the same tools, built on poor or partial data, may overlook isolated residents, informal workers, or suburbs with weak digital access. Awareness asks what people need and gives them clearer choices . Exploitation sells their fear of crime, pollution, or falling behind, then calls the sale innovation. \n [IV] A liveable city, then, is not the one with the most impressive technology. It is the one whose systems remain answerable to residents, including those who do not speak the language of platforms and dashboards. Rarely is the deepest problem the sensor itself. The harder question is who installs it, who reads its signals, who benefits from the prediction, and who disappears inside the average. If smart design cannot make room for trust, privacy, and a sense of community, the city may become efficient in a strangely lonely way.",
+   "answer": "B"
+  },
+  {
+   "id": "U3-G48",
+   "source_index": 141,
+   "type": "synonym",
+   "stem": "The phrase “ small acts of friction removed ” in paragraph 1 is closest in meaning to __________.",
+   "options": [
+    {
+     "label": "A",
+     "text": "minor problems that are made less visible"
+    },
+    {
+     "label": "B",
+     "text": "daily difficulties that are quietly reduced"
+    },
+    {
+     "label": "C",
+     "text": "public services that become more expensive"
+    },
+    {
+     "label": "D",
+     "text": "urban changes that attract public attention"
+    }
+   ],
+   "passage": "At the corner, a sensor changes the traffic light before the junction clogs. A phone warns that the air near the main road is poor, so cyclists take a quieter route. None of this feels dramatic. That is the point. The future city enters daily life not as a shining exhibition, but as small acts of friction removed . \n [I]  The smarter version of a city is not simply one covered with cameras, apps, and computer-controlled systems. Its real promise lies in connecting scattered services so that public transport runs smoothly, energy is used efficiently, and residents have access to safer facilities without navigating a maze of offices. Used well, data can reveal where traffic flow breaks down, where emissions rise, and where a neighbourhood lacks green space. Not only can technology speed up decision making, it can also make old urban neglect harder to hide. \n [II] A security camera may protect a pedestrian zone, but it may also teach people to accept constant monitoring as the price of feeling safe. [III] Predictive tools can help officials plan bus routes, while the same tools, built on poor or partial data, may overlook isolated residents, informal workers, or suburbs with weak digital access. Awareness asks what people need and gives them clearer choices . Exploitation sells their fear of crime, pollution, or falling behind, then calls the sale innovation. \n [IV] A liveable city, then, is not the one with the most impressive technology. It is the one whose systems remain answerable to residents, including those who do not speak the language of platforms and dashboards. Rarely is the deepest problem the sensor itself. The harder question is who installs it, who reads its signals, who benefits from the prediction, and who disappears inside the average. If smart design cannot make room for trust, privacy, and a sense of community, the city may become efficient in a strangely lonely way.",
+   "answer": "B"
+  },
+  {
+   "id": "U3-G49",
+   "source_index": 143,
+   "type": "antonym",
+   "stem": "The word “ scattered ” in paragraph 2 is OPPOSITE in meaning to __________.",
+   "options": [
+    {
+     "label": "A",
+     "text": "limited"
+    },
+    {
+     "label": "B",
+     "text": "modern"
+    },
+    {
+     "label": "C",
+     "text": "connected"
+    },
+    {
+     "label": "D",
+     "text": "hidden"
+    }
+   ],
+   "passage": "At the corner, a sensor changes the traffic light before the junction clogs. A phone warns that the air near the main road is poor, so cyclists take a quieter route. None of this feels dramatic. That is the point. The future city enters daily life not as a shining exhibition, but as small acts of friction removed . \n [I]  The smarter version of a city is not simply one covered with cameras, apps, and computer-controlled systems. Its real promise lies in connecting scattered services so that public transport runs smoothly, energy is used efficiently, and residents have access to safer facilities without navigating a maze of offices. Used well, data can reveal where traffic flow breaks down, where emissions rise, and where a neighbourhood lacks green space. Not only can technology speed up decision making, it can also make old urban neglect harder to hide. \n [II] A security camera may protect a pedestrian zone, but it may also teach people to accept constant monitoring as the price of feeling safe. [III] Predictive tools can help officials plan bus routes, while the same tools, built on poor or partial data, may overlook isolated residents, informal workers, or suburbs with weak digital access. Awareness asks what people need and gives them clearer choices . Exploitation sells their fear of crime, pollution, or falling behind, then calls the sale innovation. \n [IV] A liveable city, then, is not the one with the most impressive technology. It is the one whose systems remain answerable to residents, including those who do not speak the language of platforms and dashboards. Rarely is the deepest problem the sensor itself. The harder question is who installs it, who reads its signals, who benefits from the prediction, and who disappears inside the average. If smart design cannot make room for trust, privacy, and a sense of community, the city may become efficient in a strangely lonely way.",
+   "answer": "C"
+  },
+  {
+   "id": "U3-G50",
+   "source_index": 144,
+   "type": "reading_comprehension",
+   "stem": "According to paragraph 3, predictive tools may fail some groups when they __________.",
+   "options": [
+    {
+     "label": "A",
+     "text": "are used mainly to replace security cameras"
+    },
+    {
+     "label": "B",
+     "text": "are based on incomplete or unfair data"
+    },
+    {
+     "label": "C",
+     "text": "make bus routes easier for officials to plan"
+    },
+    {
+     "label": "D",
+     "text": "reduce the city’s need for digital access"
+    }
+   ],
+   "passage": "At the corner, a sensor changes the traffic light before the junction clogs. A phone warns that the air near the main road is poor, so cyclists take a quieter route. None of this feels dramatic. That is the point. The future city enters daily life not as a shining exhibition, but as small acts of friction removed . \n [I]  The smarter version of a city is not simply one covered with cameras, apps, and computer-controlled systems. Its real promise lies in connecting scattered services so that public transport runs smoothly, energy is used efficiently, and residents have access to safer facilities without navigating a maze of offices. Used well, data can reveal where traffic flow breaks down, where emissions rise, and where a neighbourhood lacks green space. Not only can technology speed up decision making, it can also make old urban neglect harder to hide. \n [II] A security camera may protect a pedestrian zone, but it may also teach people to accept constant monitoring as the price of feeling safe. [III] Predictive tools can help officials plan bus routes, while the same tools, built on poor or partial data, may overlook isolated residents, informal workers, or suburbs with weak digital access. Awareness asks what people need and gives them clearer choices . Exploitation sells their fear of crime, pollution, or falling behind, then calls the sale innovation. \n [IV] A liveable city, then, is not the one with the most impressive technology. It is the one whose systems remain answerable to residents, including those who do not speak the language of platforms and dashboards. Rarely is the deepest problem the sensor itself. The harder question is who installs it, who reads its signals, who benefits from the prediction, and who disappears inside the average. If smart design cannot make room for trust, privacy, and a sense of community, the city may become efficient in a strangely lonely way.",
+   "answer": "B"
+  }
+ ]
+}

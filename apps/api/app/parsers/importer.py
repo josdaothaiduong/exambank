@@ -184,8 +184,9 @@ def run_import(db: Session, exam: SourceExam, html: str, created_by,
         passage_by_temp[p["temp_id"]] = pg
 
     stats = {"total": 0, "with_answer": 0, "needs_answer": 0,
-             "duplicates": 0, "overwritten": 0, "failed": 0}
+             "duplicates": 0, "overwritten": 0, "failed": 0, "near_duplicates": 0}
     errors = []
+    near_dups: list[dict] = []
     for e in analysis["entries"]:
         q = e["q"]
         stats["total"] += 1
@@ -196,6 +197,12 @@ def run_import(db: Session, exam: SourceExam, html: str, created_by,
         passage_id = (passage_by_temp[q["passage_temp_id"]].id if q.get("passage_temp_id") else None)
         if e["existing"] is None:
             item = _create_question(db, exam, q, e["hash"], passage_id, created_by)
+            # EB-306: cảnh báo trùng ngữ nghĩa với câu KHÁC hash đã có trong kho (không chặn nạp)
+            from app.ai.similarity import find_near_duplicates
+            for hit in find_near_duplicates(db, exam.workspace_id, q["stem"],
+                                            [o["text"] for o in q["options"]],
+                                            exclude_hash=e["hash"]):
+                near_dups.append({"number": q["number"], "stem_text": q["stem"], **hit})
             if item.correct_option_id:
                 stats["with_answer"] += 1
             else:
@@ -218,12 +225,14 @@ def run_import(db: Session, exam: SourceExam, html: str, created_by,
         else:  # keep_old và ask dưới ngưỡng đều giữ bản cũ
             stats["duplicates"] += 1
 
+    stats["near_duplicates"] = len(near_dups)
     job.stats = stats
     job.error_log = errors
     job.status = "done"
     db.commit()
     db.refresh(job)
-    return {"status": "done", "job_id": str(job.id), "stats": stats, "error_log": errors}
+    return {"status": "done", "job_id": str(job.id), "stats": stats, "error_log": errors,
+            "near_duplicates": near_dups}
 
 
 def import_html(db: Session, exam: SourceExam, html: str, created_by) -> ImportJob:

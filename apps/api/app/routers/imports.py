@@ -43,7 +43,8 @@ def import_paste(exam_id: uuid.UUID, body: PasteIn, db: Session = Depends(get_db
     if result["status"] == "conflict":
         return JSONResponse(status_code=200, content=result)
     return {"import_job_id": result["job_id"], "status": "done", "stats": result["stats"],
-            "error_log": result["error_log"]}
+            "error_log": result["error_log"],
+            "near_duplicates": result.get("near_duplicates", [])}
 
 
 @router.post("/api/v1/source-exams/{exam_id}/import-docx", status_code=status.HTTP_201_CREATED)
@@ -69,7 +70,7 @@ async def import_docx(exam_id: uuid.UUID, file: UploadFile = File(...),
     if result["status"] == "conflict":
         return JSONResponse(status_code=200, content=result)
     return {"import_job_id": result["job_id"], "status": "done", "stats": result["stats"],
-            "error_log": result["error_log"]}
+            "error_log": result["error_log"], "near_duplicates": result.get("near_duplicates", [])}
 
 
 @router.get("/api/v1/import-jobs/{job_id}")
@@ -98,6 +99,17 @@ def review_queue(exam_id: uuid.UUID, db: Session = Depends(get_db),
             p = db.get(PassageGroup, r.passage_id)
             out["passage_text"] = p.content_text if p else None
             out["passage_html"] = p.content_html if p else None
+        if r.answer_source == AnswerSource.ai_solved:
+            from app.models import AISolution
+            sol = (db.query(AISolution).filter_by(question_id=r.id)
+                   .order_by(AISolution.created_at.desc()).first())
+            if sol:
+                out["ai_solution"] = {
+                    "model": sol.model, "confidence": float(sol.confidence),
+                    "explanation_html": sol.explanation_html,
+                    "suggested_difficulty": sol.suggested_difficulty.value if sol.suggested_difficulty else None,
+                    "suggested_tags": sol.suggested_tags,
+                }
         items.append(out)
     return {"items": items, "total": len(items)}
 
@@ -124,6 +136,14 @@ def review_question(question_id: uuid.UUID, body: ReviewIn, db: Session = Depend
     if body.action == "reject":
         q.status = QuestionStatus.rejected
     elif body.action in ("approve", "edit_and_approve"):
+        # Cổng EB-303: đáp án do AI đề xuất với confidence < 0.70 không được duyệt "mù" —
+        # giáo viên phải tự tay chọn đáp án (correct_label) thì mới duyệt được.
+        if (q.answer_source == AnswerSource.ai_solved
+                and (q.answer_confidence or 0) < 0.70 and not body.correct_label):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "AI chưa chắc chắn về đáp án này (độ tin cậy < 70%). "
+                "Hãy tự chọn đáp án đúng trước khi duyệt.")
         if body.correct_label:
             opt = db.query(Option).filter_by(question_id=q.id, label=body.correct_label).one_or_none()
             if opt is None:

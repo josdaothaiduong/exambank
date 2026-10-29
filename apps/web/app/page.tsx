@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearToken, getToken, ConflictResult, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SourceExam, Tag, Workspace } from "../lib/api";
+import { api, clearToken, getToken, ConflictResult, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SolveResult, SourceExam, Tag, Workspace } from "../lib/api";
 
 export default function Home() {
   const router = useRouter();
@@ -67,6 +67,7 @@ export default function Home() {
   const pasteRef = useRef<HTMLDivElement>(null);
   const [impExamId, setImpExamId] = useState("");
   const [impStats, setImpStats] = useState<ImportStats | null>(null);
+  const [nearDups, setNearDups] = useState<{ number: number; stem_text: string; similarity: number }[]>([]);
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [revDiff, setRevDiff] = useState<Record<string, string>>({});
   const [revUnit, setRevUnit] = useState<Record<string, string>>({});
@@ -86,6 +87,7 @@ export default function Home() {
     } else {
       setConflict(null);
       setImpStats((r as ImportResult).stats);
+      setNearDups((r as ImportResult).near_duplicates || []);
       loadQueue(impExamId);
     }
   }
@@ -123,6 +125,17 @@ export default function Home() {
     if (!impExamId) { setError("Hãy chọn đề gốc để nạp vào trước"); return; }
     lastSourceRef.current = { kind: "docx", file };
     runImport("ask");
+  }
+
+  const [solveMsg, setSolveMsg] = useState("");
+  async function doSolveAI() {
+    if (!impExamId) { setError("Hãy chọn đề gốc trước"); return; }
+    setSolveMsg("Đang giải bằng AI...");
+    try {
+      const r = await api<SolveResult>(`/api/v1/source-exams/${impExamId}/solve-ai`, { method: "POST" });
+      setSolveMsg(`AI (${r.model}) đã giải ${r.solved}/${r.total} câu · ${r.low_confidence} câu độ tin cậy thấp cần kiểm tra kỹ · chi phí ước tính $${r.cost_usd.toFixed(4)}.`);
+      loadQueue(impExamId);
+    } catch (err: any) { setError(err.message); setSolveMsg(""); }
   }
 
   const loadQueue = useCallback((examId: string) => {
@@ -307,6 +320,11 @@ export default function Home() {
               </button>
             </div>
           )}
+          {nearDups.length > 0 && (
+            <div style={{ background: "#fffbeb", border: "1px solid #f5d48b", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+              <b>⚠ Trùng ngữ nghĩa:</b> {nearDups.length} câu mới rất giống câu đã có trong kho (diễn đạt khác đôi chút) — vẫn được nạp, bạn kiểm tra lại ở màn Duyệt nếu cần.
+            </div>
+          )}
           {impStats && (
             <p style={{ marginTop: 12 }}>
               Kết quả nạp: <b>{impStats.total}</b> câu · có đáp án <b>{impStats.with_answer}</b> · chờ bổ sung đáp án{" "}
@@ -326,6 +344,10 @@ export default function Home() {
               {exams.map((e) => (<option key={e.id} value={e.id}>{e.title}</option>))}
             </select>
             <span>Đang chờ duyệt: <b>{queue?.total ?? 0}</b> câu</span>
+            <button style={{ padding: "8px 14px", background: "#6d28d9", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={doSolveAI}>
+              ✦ AI giải các câu chưa có đáp án
+            </button>
+            {solveMsg && <span style={{ fontSize: 13, color: "#53627f" }}>{solveMsg}</span>}
           </div>
           {queue && queue.total === 0 && <p>Hàng đợi trống — mọi câu của đề này đã được xử lý.</p>}
           {(queue?.items || []).map((q) => {
@@ -345,6 +367,18 @@ export default function Home() {
                   Trạng thái: {q.status} · Nguồn đáp án: {q.answer_source}
                   {q.answer_confidence != null ? ` · độ tin cậy ${Math.round(q.answer_confidence * 100)}%` : ""}
                 </div>
+                {q.ai_solution && (
+                  <div style={{ background: q.ai_solution.confidence >= 0.7 ? "#f5f0ff" : "#fef2f2", border: "1px solid #ddd0fa", borderRadius: 8, padding: 10, marginTop: 8, fontSize: 13 }}>
+                    <b>✦ AI giải thích</b> <span style={{ color: "#53627f" }}>({q.ai_solution.model} · tin cậy {Math.round(q.ai_solution.confidence * 100)}%
+                    {q.ai_solution.suggested_difficulty ? ` · gợi ý độ khó ${q.ai_solution.suggested_difficulty}` : ""})</span>
+                    <div dangerouslySetInnerHTML={{ __html: q.ai_solution.explanation_html || "" }} />
+                    {q.ai_solution.confidence < 0.7 && (
+                      <div style={{ color: "#b42318", fontWeight: 650 }}>
+                        AI chưa chắc chắn — nút Duyệt bị khoá cho đến khi bạn tự chọn đáp án đúng ở ô bên dưới.
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                   <select value={revAnswer[q.id] || correctLabel || ""} onChange={(e) => setRevAnswer({ ...revAnswer, [q.id]: e.target.value })} style={{ padding: 8 }}>
                     <option value="">— Đáp án đúng —</option>
@@ -357,7 +391,10 @@ export default function Home() {
                     <option value="">— Unit —</option>
                     {units.map((u) => (<option key={u.id} value={u.code}>{u.label}</option>))}
                   </select>
-                  <button style={{ padding: "8px 14px", background: "#12703a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={() => doReview(q, "approve")}>Duyệt vào kho</button>
+                  <button disabled={q.answer_source === "ai_solved" && (q.answer_confidence ?? 0) < 0.7 && !revAnswer[q.id]}
+                    style={{ padding: "8px 14px", background: "#12703a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700,
+                      opacity: q.answer_source === "ai_solved" && (q.answer_confidence ?? 0) < 0.7 && !revAnswer[q.id] ? 0.45 : 1 }}
+                    onClick={() => doReview(q, "approve")}>Duyệt vào kho</button>
                   <button style={{ padding: "8px 14px", background: "#fff", color: "#b42318", border: "1px solid #e5b3ae", borderRadius: 8, fontWeight: 700 }} onClick={() => doReview(q, "reject")}>Loại bỏ</button>
                 </div>
               </div>
