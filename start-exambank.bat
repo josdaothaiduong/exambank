@@ -40,8 +40,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo Cho he thong san sang...
-timeout /t 15 /nobreak >nul
+echo Cho he thong san sang [lan dau co the mat 1-2 phut]...
+powershell -NoProfile -Command "$ok=$false; 1..60 | ForEach-Object { if(-not $ok){ try { $r=Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 http://localhost:8000/health; if($r.StatusCode -eq 200){ $ok=$true } } catch { Start-Sleep -Seconds 2 } } }; if(-not $ok){ Write-Host 'He thong chua san sang sau 2 phut - hay doi them roi mo http://localhost:3000 bang tay.' }
 echo Mo trinh duyet tai http://localhost:3000 ...
 start http://localhost:3000
 echo.
