@@ -87,3 +87,19 @@ Chỉ dùng nếu sau này tách riêng một trang giới thiệu/tải tài li
 - [x] `docker-compose.prod.yml` + `infra/Caddyfile` (HTTPS tự động) cho đường A
 - [x] CORS cấu hình qua biến môi trường `CORS_ORIGINS` (thêm tên miền public không cần sửa code)
 - [x] `.env.production.example` liệt kê mọi bí mật cần đặt ở môi trường public
+
+## 5. So sánh chi phí A vs B (bổ sung 2026-10-29, giá tham khảo tháng 10/2026)
+
+**Đường A — VPS:** Hetzner CX (2 vCPU/4GB, Singapore hoặc Đức) ~$6.5/tháng + tên miền ~$1/tháng.
+Tất cả trong 1 hóa đơn, cố định: **~$8-15/tháng (~200-380k VNĐ)**, không phụ thuộc lượng dùng vừa phải.
+
+**Đường B — Vercel + quản trị:** Vercel Pro $20/ghế + API Render Standard $25 (Starter $7 chỉ 512MB RAM, rất chật)
++ Worker $7-25 + Postgres Neon/Render $6-19 + Upstash $0-10 + R2 ~$0-5.
+Tối thiểu khả thi ~$46-50/tháng, cấu hình production thực tế ~$74-90/tháng: **(~1.2-2.3 triệu VNĐ)**, gấp 5-8 lần Đường A.
+Đường B có thể $0 ở mức demo (free tier) nhưng: Render free ngủ sau 15 phút không dùng, Postgres free hết hạn 30 ngày,
+Vercel Hobby cấm dùng thương mại — chỉ hợp để demo ngắn hạn.
+
+**Kết luận tối ưu theo giai đoạn:** MVP/người dùng thật đầu tiên -> Đường A.
+Giữ sẵn khả năng chuyển Đường B (đã dự trù: vercel.json, CORS env, S3-compatible) và chỉ chuyển khi:
+quy mô lớn (hàng trăm người dùng đồng thời), cần tốc độ toàn cầu, hoặc không còn ai trông coi VPS.
+Chi phí AI API là khoản riêng, hai đường bằng nhau.
