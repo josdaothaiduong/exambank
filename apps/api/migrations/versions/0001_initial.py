@@ -15,7 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute('-- Cần: CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS vector;')
+    op.execute('CREATE EXTENSION IF NOT EXISTS pgcrypto;')
+    op.execute('CREATE EXTENSION IF NOT EXISTS vector;')
     op.execute("CREATE TYPE question_status AS ENUM\n  ('draft','parsed','needs_answer','ai_solving','pending_review','approved','rejected','archived');")
     op.execute("CREATE TYPE answer_source AS ENUM\n  ('red_text','highlight','bold_underline','marker_star','answer_key_table','ai_solved','teacher_manual','unknown');")
     op.execute("CREATE TYPE difficulty_level AS ENUM ('NB','TH','VD','VDC');")
