@@ -79,6 +79,7 @@ def review_queue(exam_id: uuid.UUID, db: Session = Depends(get_db),
             from app.models import PassageGroup
             p = db.get(PassageGroup, r.passage_id)
             out["passage_text"] = p.content_text if p else None
+            out["passage_html"] = p.content_html if p else None
         items.append(out)
     return {"items": items, "total": len(items)}
 

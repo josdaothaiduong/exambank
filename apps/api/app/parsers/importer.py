@@ -29,7 +29,7 @@ def import_html(db: Session, exam: SourceExam, html: str, created_by) -> ImportJ
         p = parsed["passages"][0]
         passage = PassageGroup(
             source_exam_id=exam.id, workspace_id=exam.workspace_id,
-            passage_type=p["passage_type"], content_html=p["content_text"],
+            passage_type=p["passage_type"], content_html=p.get("content_html") or p["content_text"],
             content_text=p["content_text"],
         )
         db.add(passage)
@@ -57,7 +57,7 @@ def import_html(db: Session, exam: SourceExam, html: str, created_by) -> ImportJ
             workspace_id=exam.workspace_id, source_exam_id=exam.id,
             passage_id=passage.id if passage else None,
             question_type=q["question_type"], order_in_source=q["number"],
-            stem_html=q["stem"], stem_text=q["stem"],
+            stem_html=q.get("stem_html") or q["stem"], stem_text=q["stem"],
             status=QuestionStatus.pending_review if det else QuestionStatus.needs_answer,
             answer_source=AnswerSource(det["source"]) if det else AnswerSource.unknown,
             answer_confidence=det["confidence"] if det else None,
@@ -68,7 +68,7 @@ def import_html(db: Session, exam: SourceExam, html: str, created_by) -> ImportJ
         correct_id = None
         for i, o in enumerate(q["options"]):
             opt = Option(question_id=item.id, label=o["label"],
-                         content_html=o["text"], content_text=o["text"], position=i)
+                         content_html=o.get("html") or o["text"], content_text=o["text"], position=i)
             db.add(opt)
             db.flush()
             if det and o["label"] == det["label"]:

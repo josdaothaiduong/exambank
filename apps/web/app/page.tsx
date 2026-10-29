@@ -246,12 +246,12 @@ export default function Home() {
             const correctLabel = q.options.find((o) => o.id === q.correct_option_id)?.label;
             return (
               <div key={q.id} style={box}>
-                {q.passage_text && <div style={{ background: "#f4f7fd", padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 8 }}>{q.passage_text}</div>}
-                <b>{q.stem_text}</b>
+                {(q.passage_html || q.passage_text) && <div style={{ background: "#f4f7fd", padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 8 }} dangerouslySetInnerHTML={{ __html: q.passage_html || q.passage_text || "" }} />}
+                <div style={{ fontWeight: 650 }} dangerouslySetInnerHTML={{ __html: q.stem_html || q.stem_text }} />
                 <div style={{ display: "grid", gap: 4, fontSize: 14, margin: "8px 0" }}>
                   {q.options.map((o) => (
                     <span key={o.id} style={o.label === (revAnswer[q.id] || correctLabel) ? { fontWeight: 700, color: "#12703a" } : {}}>
-                      {o.label}. {o.content_text}{o.label === correctLabel ? " ✓ (hệ thống nhận diện)" : ""}
+                      <span dangerouslySetInnerHTML={{ __html: `${o.label}. ${o.content_html || o.content_text}` }} />{o.label === correctLabel ? " ✓ (hệ thống nhận diện)" : ""}
                     </span>
                   ))}
                 </div>

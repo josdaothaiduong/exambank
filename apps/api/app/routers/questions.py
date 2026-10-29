@@ -28,7 +28,7 @@ def _out(q: QuestionItem, db: Session) -> dict:
         "correct_option_id": str(q.correct_option_id) if q.correct_option_id else None,
         "answer_source": q.answer_source.value if hasattr(q.answer_source, "value") else q.answer_source,
         "answer_confidence": q.answer_confidence,
-        "options": [{"id": str(o.id), "label": o.label, "content_text": o.content_text}
+        "options": [{"id": str(o.id), "label": o.label, "content_text": o.content_text, "content_html": o.content_html}
                     for o in options],
         "tags": sorted(tag_codes),
         "used_count": q.used_count,

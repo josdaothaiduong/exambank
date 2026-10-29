@@ -12,6 +12,21 @@
 
 **Trạng thái test cuối Tuần 2: pytest 24 passed (16 Tuần 1 + 3 golden + 5 import), CI local ALL GREEN, frontend build thành công.**
 
+## Bổ sung sau phản hồi của Ha (2026-10-29): giữ nguyên in đậm/gạch chân là NỘI DUNG đề
+Ha chỉ ra đúng một lỗ hổng thật: in đậm/gạch chân trong đoạn văn và câu hỏi là phần học sinh
+phải nhận biết (VD: "từ **crucial** in đậm trong đoạn đồng nghĩa với từ gì?", "câu được gạch
+chân trong đoạn 4 ngụ ý gì?"). Kiểm tra lại đã phát hiện 3 lỗi và sửa hết:
+1. Marker nội bộ `[[B]]` bị LỌT vào stem/passage lưu trữ, định dạng nhấn mạnh bị mất hẳn →
+   nay parser sinh riêng `stem_html` / passage `content_html` / option html khôi phục `<b> <u> <i>`,
+   bản text luôn sạch marker (có test cấm lọt `[[`).
+2. Đáp án viết bằng `<span style="font-weight: bold">` (kiểu dán từ Word/Google Docs) không được
+   nhận diện → nay nhận đậm/gạch chân qua cả thẻ lẫn style (font-weight ≥ 600, text-decoration).
+3. Màn Duyệt trước đây hiển thị text thô, giáo viên không đối chiếu được phần nhấn mạnh →
+   nay hiển thị đúng in đậm/gạch chân/nghiêng như đề gốc (nội dung đã qua sanitize phía server).
+Nguyên tắc phân biệt rõ: nhấn mạnh trong THÂN CÂU/ĐOẠN VĂN = nội dung đề, luôn giữ;
+nhấn mạnh trong PHƯƠNG ÁN = tín hiệu đáp án tiềm năng (chỉ khi đúng 1 phương án được nhấn và
+không có dấu hiệu mạnh hơn). Kiểm chứng: 5 test hồi quy mới — pytest 29 passed.
+
 ## Thay đổi nền tảng kèm theo
 - `models.py`: JSONB thêm `.with_variant(JSON, 'sqlite')` — PostgreSQL vẫn dùng JSONB, SQLite (test/dev) dùng JSON. Hết lỗi CompileError khi test các bảng có JSONB (import_jobs, ai_solutions...).
 - Import hiện chạy đồng bộ trong request (đủ nhanh với đề ≤ vài trăm câu); chuyển Celery bất đồng bộ để ở Tuần 3 cùng pipeline AI.

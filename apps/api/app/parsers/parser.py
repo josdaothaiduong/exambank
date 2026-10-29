@@ -38,9 +38,45 @@ def _is_highlight(el) -> bool:
     return v not in ("transparent", "#ffffff", "rgb(255, 255, 255)") and not v.startswith("rgba(0, 0, 0")
 
 
+def _is_bold(el) -> bool:
+    if el.name in ("b", "strong"):
+        return True
+    m = re.search(r"font-weight:\s*([^;]+)", _style(el))
+    if not m:
+        return False
+    v = m.group(1).strip()
+    return v in ("bold", "bolder") or (v.isdigit() and int(v) >= 600)
+
+
+def _is_underline(el) -> bool:
+    if el.name == "u":
+        return True
+    return "underline" in (_style(el) or "")
+
+
+def _is_italic(el) -> bool:
+    return el.name in ("i", "em") or "italic" in (_style(el) or "")
+
+
+def _markers_to_html(s: str) -> str:
+    """Khôi phục định dạng nhấn mạnh từ marker nội bộ: [[B]]-><b>, [[U]]-><u>.
+    Marker đáp án [[A]] bị gỡ (đáp án được thể hiện qua correct_option_id, không tô lại)."""
+    s = re.sub(r"\[\[A\]\](.*?)\[\[/A:\w+\]\]", r"\1", s)
+    return (s.replace("[[B]]", "<b>").replace("[[/B]]", "</b>")
+             .replace("[[U]]", "<u>").replace("[[/U]]", "</u>")
+             .replace("[[I]]", "<i>").replace("[[/I]]", "</i>"))
+
+
+def _markers_to_text(s: str) -> str:
+    return re.sub(r"\[\[A\]\]|\[\[/A:\w+\]\]|\[\[B\]\]|\[\[/B\]\]|\[\[U\]\]|\[\[/U\]\]|\[\[I\]\]|\[\[/I\]\]", "", s)
+
+
 def _mark_answers(soup) -> None:
-    """Bọc text ở lá DOM bằng marker: [[A]]..[[/A:source]] cho đỏ/highlight,
-    [[B]]..[[/B]] cho bold/underline (chỉ dùng xét trong phạm vi 1 phương án)."""
+    """Bọc text ở lá DOM bằng marker nội bộ:
+    [[A]]..[[/A:source]] = tín hiệu đáp án (đỏ/highlight);
+    [[B]]..[[/B]] = in đậm, [[U]]..[[/U]] = gạch chân — ĐÂY LÀ NỘI DUNG ĐỀ (từ/câu cần
+    học sinh nhận biết), phải được khôi phục thành <b>/<u> khi lưu stem_html/passage,
+    TUYỆT ĐỐI không để lọt marker thô vào dữ liệu lưu trữ."""
     for el in soup.find_all(True):
         if el.find(True) is not None:  # chỉ xét phần tử lá
             continue
@@ -51,7 +87,11 @@ def _mark_answers(soup) -> None:
             el.string = f"[[A]]{text}[[/A:red_text]]"
         elif _is_highlight(el):
             el.string = f"[[A]]{text}[[/A:highlight]]"
-        elif el.name in ("b", "strong", "u"):
+        elif _is_underline(el):
+            el.string = f"[[U]]{text}[[/U]]"
+        elif _is_italic(el):
+            el.string = f"[[I]]{text}[[/I]]"
+        elif _is_bold(el):
             el.string = f"[[B]]{text}[[/B]]"
 
 
@@ -109,26 +149,29 @@ def parse_exam_html(html: str) -> dict:
         marks = list(_OPTION_MARKS.finditer(body))
         if len(marks) < 2:
             questions.append({
-                "number": num, "stem": body.strip(), "options": [],
+                "number": num, "stem": _markers_to_text(body.strip()),
+                "stem_html": _markers_to_html(body.strip()), "options": [],
                 "detected_answer": None,
                 "warnings": ["Không tách được phương án A-D"],
-                "question_type": _guess_type(body, bool(passage_chunks)),
+                "question_type": _guess_type(_markers_to_text(body), bool(passage_chunks)),
             })
             continue
-        stem = body[: marks[0].start()].strip()
+        stem_raw = body[: marks[0].start()].strip()
+        stem = _markers_to_text(stem_raw)
         options, detected = [], None
         for i, mk in enumerate(marks):
             start = mk.end()
             end = marks[i + 1].start() if i + 1 < len(marks) else len(body)
             seg = body[start:end].strip()
             dm = re.search(r"\[\[A\]\](.*?)\[\[/A:(\w+)\]\]", seg)
-            bold_len = sum(len(x) for x in re.findall(r"\[\[B\]\](.*?)\[\[/B\]\]", seg))
-            clean_seg = re.sub(r"\[\[A\]\]|\[\[/A:\w+\]\]|\[\[B\]\]|\[\[/B\]\]", "", seg).strip()
+            emph_len = sum(len(x) for x in re.findall(r"\[\[(?:B|U)\]\](.*?)\[\[/(?:B|U)\]\]", seg))
+            clean_seg = _markers_to_text(seg).strip()
             if dm and detected is None:
                 detected = {"label": mk.group(1), "source": dm.group(2),
                             "confidence": 0.99 if dm.group(2) == "red_text" else 0.97}
             options.append({"label": mk.group(1), "text": clean_seg,
-                            "_bold_ratio": (bold_len / len(clean_seg)) if clean_seg else 0})
+                            "html": _markers_to_html(seg).strip(),
+                            "_bold_ratio": (emph_len / len(clean_seg)) if clean_seg else 0})
         # Nguồn bold_underline: đúng 1 phương án được in đậm/gạch chân gần như toàn bộ
         if detected is None:
             bold_opts = [o for o in options if o["_bold_ratio"] >= 0.8]
@@ -140,7 +183,7 @@ def parse_exam_html(html: str) -> dict:
         for o in options:
             o.pop("_bold_ratio", None)
         questions.append({
-            "number": num, "stem": stem, "options": options,
+            "number": num, "stem": stem, "stem_html": _markers_to_html(stem_raw), "options": options,
             "detected_answer": detected, "warnings": [],
             "question_type": _guess_type(stem, bool(passage_chunks)),
         })
@@ -161,9 +204,11 @@ def parse_exam_html(html: str) -> dict:
     passage_chunks = [c for c in (_strip_instruction(c) for c in passage_chunks) if c]
     passages = []
     if passage_chunks and questions:
+        joined = " ".join(passage_chunks)
         passages.append({
             "temp_id": "p1", "passage_type": "reading_comprehension",
-            "content_text": " ".join(passage_chunks),
+            "content_text": _markers_to_text(joined),
+            "content_html": _markers_to_html(joined),
             "question_numbers": [q["number"] for q in questions],
         })
         for q in questions:

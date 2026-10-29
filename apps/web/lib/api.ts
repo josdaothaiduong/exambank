@@ -50,8 +50,8 @@ export interface Tag { id: string; kind: string; code: string; label: string }
 export interface QuestionItem {
   id: string; question_type: string; stem_text: string; status: string;
   difficulty: string | null; answer_source: string; answer_confidence: number | null;
-  correct_option_id: string | null; passage_text?: string | null; tags: string[];
-  options: { id: string; label: string; content_text: string }[];
+  correct_option_id: string | null; stem_html?: string; passage_text?: string | null; passage_html?: string | null; tags: string[];
+  options: { id: string; label: string; content_text: string; content_html?: string }[];
 }
 export interface ImportStats { total: number; with_answer: number; needs_answer: number; duplicates: number; failed: number }
 export interface ImportResult { import_job_id: string; status: string; stats: ImportStats; error_log: unknown[] }
