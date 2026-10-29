@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearToken, getToken, ConflictResult, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SolveResult, SourceExam, Tag, Workspace } from "../lib/api";
+import { api, clearToken, getToken, ConflictResult, ExamTemplate, GeneratedExam, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SolveResult, SourceExam, Tag, Workspace } from "../lib/api";
 
 export default function Home() {
   const router = useRouter();
@@ -128,6 +128,65 @@ export default function Home() {
   }
 
   const [solveMsg, setSolveMsg] = useState("");
+  const [templates, setTemplates] = useState<ExamTemplate[]>([]);
+  const [genTplId, setGenTplId] = useState("");
+  const [genTitle, setGenTitle] = useState("");
+  const [genVersions, setGenVersions] = useState(4);
+  const [genExam, setGenExam] = useState<GeneratedExam | null>(null);
+  const [genShortfall, setGenShortfall] = useState("");
+  const [prevCode, setPrevCode] = useState("001");
+  const [prevTeacher, setPrevTeacher] = useState(false);
+
+  const loadTemplates = useCallback(() => {
+    if (!wsId) return;
+    api<{ items: ExamTemplate[] }>(`/api/v1/exam-templates?workspace_id=${wsId}`)
+      .then((r) => { setTemplates(r.items); if (!genTplId && r.items.length) setGenTplId(r.items[0].id); })
+      .catch((e: any) => setError(e.message));
+  }, [wsId]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === "builder") loadTemplates(); }, [tab, loadTemplates]);
+
+  async function doGenerate() {
+    setGenShortfall(""); setGenExam(null);
+    try {
+      const r = await api<GeneratedExam>("/api/v1/exams/generate", {
+        method: "POST",
+        body: JSON.stringify({ workspace_id: wsId, template_id: genTplId, title: genTitle || undefined, n_versions: genVersions }),
+      });
+      const detail = await api<GeneratedExam>(`/api/v1/exams/${r.id}`);
+      setGenExam(detail); setPrevCode("001");
+    } catch (e: any) {
+      let msg = e.message;
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.message) {
+          msg = parsed.message + (parsed.shortfalls || []).map((s: any) => `\n• ${s.section}: cần ${s.needed}, kho có ${s.available}`).join("");
+        }
+      } catch {}
+      setGenShortfall(msg);
+    }
+  }
+
+  async function downloadDocx(kind: string, version?: string) {
+    if (!genExam) return;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/exams/${genExam.id}/export/docx?kind=${kind}${version ? `&version=${version}` : ""}`,
+      { headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) { setError("Tải Word thất bại"); return; }
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `de-${kind}${version ? "-" + version : ""}.docx`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function openPrint(teacher: boolean) {
+    if (!genExam) return;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/exams/${genExam.id}/versions/${prevCode}/print?teacher=${teacher}`,
+      { headers: { Authorization: `Bearer ${getToken()}` } });
+    const htmlText = await res.text();
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(htmlText); w.document.close(); }
+  }
   async function doSolveAI() {
     if (!impExamId) { setError("Hãy chọn đề gốc trước"); return; }
     setSolveMsg("Đang giải bằng AI...");
@@ -404,10 +463,68 @@ export default function Home() {
       )}
 
       {tab === "builder" && (
-        <section style={box}>
-          <h3>Tạo đề</h3>
-          <p>Sinh đề theo mẫu, hoán vị nhiều mã đề và xuất Word/PDF thuộc <b>EB-401 → EB-405, Tuần 4</b>.</p>
-          <p>Điều kiện tiên quyết: kho phải có câu ở trạng thái đã duyệt — dữ liệu đó bắt đầu có từ Tuần 2.</p>
+        <section>
+          <div style={{ ...box, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <select value={genTplId} onChange={(e) => setGenTplId(e.target.value)} style={{ padding: 9, flex: 2 }}>
+              {templates.map((tp) => (<option key={tp.id} value={tp.id}>{tp.name} — {tp.duration_minutes} phút</option>))}
+            </select>
+            <input placeholder="Tiêu đề đề (để trống = tên mẫu)" value={genTitle} onChange={(e) => setGenTitle(e.target.value)} style={{ padding: 9, flex: 2 }} />
+            <select value={genVersions} onChange={(e) => setGenVersions(Number(e.target.value))} style={{ padding: 9 }}>
+              <option value={1}>1 mã đề</option><option value={2}>2 mã đề</option><option value={4}>4 mã đề</option><option value={8}>8 mã đề</option>
+            </select>
+            <button style={{ padding: "9px 16px", background: "#173a7a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={doGenerate}>
+              🎲 Sinh đề từ kho đã duyệt
+            </button>
+          </div>
+          {genShortfall && (
+            <div style={{ background: "#fef2f2", border: "1px solid #f3b3ad", borderRadius: 10, padding: 12, whiteSpace: "pre-wrap" }}>
+              <b>Chưa sinh được đề:</b> {genShortfall}
+            </div>
+          )}
+          {genExam && (
+            <div style={box}>
+              <b>{genExam.title}</b> — {genExam.versions.length} mã đề · {genExam.versions[0]?.question_count} câu/mã
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, fontSize: 13 }}>
+                {genExam.versions.map((v) => (
+                  <span key={v.code}>Mã {v.code}: A×{v.answer_balance.A || 0} B×{v.answer_balance.B || 0} C×{v.answer_balance.C || 0} D×{v.answer_balance.D || 0}</span>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                <button style={btn} onClick={() => downloadDocx("student")}>⬇ Word — bản học sinh</button>
+                <button style={btn} onClick={() => downloadDocx("teacher")}>⬇ Word — bản giáo viên (có đáp án)</button>
+                <button style={btn} onClick={() => downloadDocx("matrix")}>⬇ Word — ma trận đề</button>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+                <span>Xem trước mã:</span>
+                <select value={prevCode} onChange={(e) => setPrevCode(e.target.value)} style={{ padding: 7 }}>
+                  {genExam.versions.map((v) => (<option key={v.code} value={v.code}>{v.code}</option>))}
+                </select>
+                <label style={{ fontSize: 13 }}><input type="checkbox" checked={prevTeacher} onChange={(e) => setPrevTeacher(e.target.checked)} /> Hiện đáp án</label>
+                <button style={btn} onClick={() => openPrint(prevTeacher)}>🖨 Mở bản in / PDF</button>
+              </div>
+              <div style={{ marginTop: 12, borderTop: "1px solid #e3e9f4", paddingTop: 10 }}>
+                {(() => {
+                  const ver = genExam.versions.find((v) => v.code === prevCode);
+                  const seenPassage = new Set<string>();
+                  return (ver?.items || []).map((it: any) => {
+                    const showPassage = it.passage_id && !seenPassage.has(it.passage_id);
+                    if (it.passage_id) seenPassage.add(it.passage_id);
+                    return (
+                      <div key={it.position} style={{ marginBottom: 10 }}>
+                        {showPassage && it.passage && (<div style={{ fontStyle: "italic", margin: "8px 0 8px 16px" }} dangerouslySetInnerHTML={{ __html: it.passage.content_html }} />)}
+                        <div><b>Câu {it.position}:</b> <span dangerouslySetInnerHTML={{ __html: it.stem_html }} /></div>
+                        {it.options.map((o: any) => (
+                          <div key={o.label} style={{ marginLeft: 22, ...(prevTeacher && o.label === it.correct_label ? { fontWeight: 700, textDecoration: "underline" } : {}) }}>
+                            {o.label}. <span dangerouslySetInnerHTML={{ __html: o.html }} />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
         </section>
       )}
     </main>

@@ -69,3 +69,8 @@ export interface ConflictResult {
 export interface ReviewQueue { items: QuestionItem[]; total: number }
 export interface SolveResult { mode: string; provider: string; model: string; total: number; solved: number; failed: number; low_confidence: number; cost_usd: number }
 export interface QuestionPage { items: QuestionItem[]; total: number; page: number; page_size: number }
+
+export interface TemplateSection { name: string; question_type: string; passage_type: string | null; question_count: number; difficulty_mix: Record<string, number> }
+export interface ExamTemplate { id: string; name: string; grade: number | null; total_questions: number; duration_minutes: number; is_system: boolean; sections: TemplateSection[] }
+export interface ExamVersionOut { code: string; answer_balance: Record<string, number>; question_count: number; items?: (QuestionItem & { position: number; passage_id?: string | null; passage?: { content_html: string; title?: string | null } | null })[] }
+export interface GeneratedExam { id: string; title: string; grade: number | null; duration_minutes: number | null; versions: ExamVersionOut[] }

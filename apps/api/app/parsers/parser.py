@@ -157,14 +157,38 @@ def _extract_answer_key(text: str):
     return {}, text
 
 
+_READING_MARKERS = (
+    "according to", "which of the following", "the word", "the phrase", "paragraph",
+    "main idea", "best title", "can be inferred", "is true", "not true", "refers to",
+    "the author", "the passage", "best fits", "where in the passage",
+)
+
+
 def _guess_type(stem: str, has_passage: bool) -> str:
+    """Phân loại dạng bài theo dấu hiệu trong thân câu (EB-406 cải tiến từ UAT vòng 1):
+    bản cũ gán gần như mọi câu có đoạn văn thành reading_comprehension khiến kho thật
+    không sinh được đề theo mẫu. Thứ tự ưu tiên: đồng/trái nghĩa -> sắp xếp -> điền
+    khuyết (câu có chỗ trống gắn với đoạn) -> đọc hiểu (dấu hiệu hỏi về đoạn) -> mặc định."""
     s = stem.lower()
     if "closest in meaning" in s:
         return "synonym"
-    if "opposite in meaning" in s:
+    if "opposite in meaning" in s or "opposite in meaning" in s.replace("  ", " "):
         return "antonym"
+    if "arrange" in s or "rearrange" in s or "put the sentences in" in s:
+        return "sentence_arrangement"
+    has_blank = ("______" in stem or "_____" in stem or "chỗ trống" in s
+                 or bool(re.search(r"\(\d{1,2}\)\s*___", stem)))
     if has_passage:
+        if has_blank:
+            return "cloze"
+        if any(m in s for m in _READING_MARKERS):
+            return "reading_comprehension"
+        # Câu hỏi về đoạn nhưng không có dấu hiệu rõ: vẫn là đọc hiểu
         return "reading_comprehension"
+    if has_blank:
+        # Câu độc lập có chỗ trống: ngữ pháp nếu phương án thiên về dạng động từ/cấu trúc,
+        # còn lại coi là từ vựng — quyết định ở nơi gọi (mặc định grammar_mc như cũ).
+        return "grammar_mc"
     return "grammar_mc"
 
 

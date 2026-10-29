@@ -40,10 +40,14 @@ from app.routers import ai as ai_router  # noqa: E402
 
 app.include_router(ai_router.router)
 
+from app.routers import exams as exams_router  # noqa: E402
+
+app.include_router(exams_router.router)
+
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "exambank-api", "milestone": "EB-303"}
+    return {"status": "ok", "service": "exambank-api", "milestone": "EB-405"}
 
 
 @app.get("/api/v1/tags")

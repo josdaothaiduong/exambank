@@ -54,7 +54,16 @@ def _analyze(db: Session, exam: SourceExam, parsed: dict) -> dict:
     total_valid = duplicates = 0
     for q in parsed["questions"]:
         if not q["options"]:
-            entries.append({"q": q, "hash": None, "existing": None, "failed": True})
+            entries.append({"q": q, "hash": None, "existing": None, "failed": True,
+                            "issue": "no_options_parsed"})
+            continue
+        # EB-406 (UAT vòng 1): câu có nhãn phương án TRÙNG nhau (VD 2 dãy A-B-C-D trong
+        # 1 câu sắp xếp thư ở đề thật) sẽ vi phạm UNIQUE(question_id, label) và làm sập
+        # cả lượt import — phải cách ly thành câu lỗi, phần còn lại nạp bình thường.
+        labels = [o["label"] for o in q["options"]]
+        if len(labels) != len(set(labels)):
+            entries.append({"q": q, "hash": None, "existing": None, "failed": True,
+                            "issue": "duplicate_option_labels"})
             continue
         total_valid += 1
         h = dedup_hash(q["stem"], [o["text"] for o in q["options"]])
@@ -192,7 +201,7 @@ def run_import(db: Session, exam: SourceExam, html: str, created_by,
         stats["total"] += 1
         if e["failed"]:
             stats["failed"] += 1
-            errors.append({"question": q["number"], "issue": "no_options_parsed"})
+            errors.append({"question": q["number"], "issue": e.get("issue", "no_options_parsed")})
             continue
         passage_id = (passage_by_temp[q["passage_temp_id"]].id if q.get("passage_temp_id") else None)
         if e["existing"] is None:

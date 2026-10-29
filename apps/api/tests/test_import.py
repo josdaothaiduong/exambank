@@ -117,3 +117,17 @@ def test_docx_pipeline_shares_parser(ctx):
                                            exam_kind="quiz"), db=ctx["db"], user=ctx["ua"])
     job = import_html(ctx["db"], ctx["db"].get(SourceExam, uuid.UUID(exam["id"])), html, created_by=ctx["ua"].id)
     assert job.stats["total"] == 2 and job.stats["with_answer"] == 2, job.stats
+
+
+def test_import_quarantines_duplicate_option_labels(ctx):
+    """EB-406 UAT: 1 câu có 2 dãy A-B-C-D (nhãn trùng) không được làm sập cả lượt import."""
+    html = """
+    <p>Question 1: Normal question ______ here. A. one B. two C. three D. four</p>
+    <p>Question 2: Dear Sir, a. first part b. second part A. opt1 B. opt2 C. opt3 D. opt4 A. dup B. dup2 C. dup3</p>
+    <p>Question 3: Another normal ______ one. A. x B. y C. z D. w</p>
+    """
+    out = import_paste(ctx["exam_id"], PasteIn(html=html), db=ctx["db"], user=ctx["ua"])
+    assert out["status"] == "done"
+    issues = {e["issue"] for e in out["error_log"]}
+    assert "duplicate_option_labels" in issues
+    assert out["stats"]["failed"] >= 1
