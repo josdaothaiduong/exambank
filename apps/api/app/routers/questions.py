@@ -27,6 +27,7 @@ def _out(q: QuestionItem, db: Session) -> dict:
         "difficulty": q.difficulty.value if q.difficulty and hasattr(q.difficulty, "value") else q.difficulty,
         "correct_option_id": str(q.correct_option_id) if q.correct_option_id else None,
         "answer_source": q.answer_source.value if hasattr(q.answer_source, "value") else q.answer_source,
+        "answer_confidence": q.answer_confidence,
         "options": [{"id": str(o.id), "label": o.label, "content_text": o.content_text}
                     for o in options],
         "tags": sorted(tag_codes),

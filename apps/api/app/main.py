@@ -32,10 +32,14 @@ from app.routers import source_exams as source_exams_router  # noqa: E402
 app.include_router(source_exams_router.router)
 app.include_router(questions_router.router)
 
+from app.routers import imports as imports_router  # noqa: E402
+
+app.include_router(imports_router.router)
+
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "exambank-api", "milestone": "EB-105"}
+    return {"status": "ok", "service": "exambank-api", "milestone": "EB-206"}
 
 
 @app.get("/api/v1/tags")

@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import JSON as _JSON
 from sqlalchemy import (
     Boolean, CheckConstraint, DateTime, ForeignKey, Integer, JSON, Numeric,
     SmallInteger, String, Text, UniqueConstraint, func,
@@ -94,8 +95,8 @@ class ImportJob(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     source_exam_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("source_exams.id", ondelete="CASCADE"), nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
-    stats: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    error_log: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    stats: Mapped[dict] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'), nullable=False, default=dict)
+    error_log: Mapped[list] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'), nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -185,11 +186,11 @@ class AISolution(Base):
     model: Mapped[str] = mapped_column(Text, nullable=False)
     suggested_option_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("options.id"))
     explanation_html: Mapped[str | None] = mapped_column(Text)
-    suggested_tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    suggested_tags: Mapped[list] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'), nullable=False, default=list)
     suggested_difficulty: Mapped[Difficulty | None] = mapped_column(
         SAEnum(Difficulty, name="difficulty_level", create_type=False))
     confidence: Mapped[float] = mapped_column(Numeric(4, 3), nullable=False)
-    raw_response: Mapped[dict | None] = mapped_column(JSONB)
+    raw_response: Mapped[dict | None] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -214,8 +215,8 @@ class TemplateSection(Base):
     question_type: Mapped[str] = mapped_column(Text, nullable=False)
     passage_type: Mapped[str | None] = mapped_column(Text)
     question_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    difficulty_mix: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    tag_filter: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    difficulty_mix: Mapped[dict] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'), nullable=False, default=dict)
+    tag_filter: Mapped[dict] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'), nullable=False, default=dict)
 
 
 class Exam(Base):
@@ -236,7 +237,7 @@ class ExamVersion(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     exam_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"), nullable=False)
     code: Mapped[str] = mapped_column(Text, nullable=False)
-    answer_balance: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    answer_balance: Mapped[dict] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'), nullable=False, default=dict)
 
 
 class ExamItem(Base):
@@ -248,4 +249,4 @@ class ExamItem(Base):
     passage_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("passage_groups.id"))
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     shuffled_correct_label: Mapped[str | None] = mapped_column(Text)
-    snapshot_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    snapshot_json: Mapped[dict] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'), nullable=False)

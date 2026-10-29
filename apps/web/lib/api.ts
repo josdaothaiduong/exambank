@@ -15,8 +15,9 @@ export function clearToken() {
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isForm ? {} : { "Content-Type": "application/json" }),
     ...((init.headers as Record<string, string>) || {}),
   };
   const token = getToken();
@@ -48,7 +49,11 @@ export interface SourceExam {
 export interface Tag { id: string; kind: string; code: string; label: string }
 export interface QuestionItem {
   id: string; question_type: string; stem_text: string; status: string;
-  difficulty: string | null; answer_source: string; tags: string[];
+  difficulty: string | null; answer_source: string; answer_confidence: number | null;
+  correct_option_id: string | null; passage_text?: string | null; tags: string[];
   options: { id: string; label: string; content_text: string }[];
 }
+export interface ImportStats { total: number; with_answer: number; needs_answer: number; duplicates: number; failed: number }
+export interface ImportResult { import_job_id: string; status: string; stats: ImportStats; error_log: unknown[] }
+export interface ReviewQueue { items: QuestionItem[]; total: number }
 export interface QuestionPage { items: QuestionItem[]; total: number; page: number; page_size: number }
