@@ -53,7 +53,17 @@ export interface QuestionItem {
   correct_option_id: string | null; stem_html?: string; passage_text?: string | null; passage_html?: string | null; tags: string[];
   options: { id: string; label: string; content_text: string; content_html?: string }[];
 }
-export interface ImportStats { total: number; with_answer: number; needs_answer: number; duplicates: number; failed: number }
+export interface ImportStats { total: number; with_answer: number; needs_answer: number; duplicates: number; overwritten: number; failed: number }
 export interface ImportResult { import_job_id: string; status: string; stats: ImportStats; error_log: unknown[] }
+export interface DupOption { label: string; content_text: string }
+export interface DuplicateComparison {
+  dedup_hash: string; number: number;
+  new: { stem_text: string; options: DupOption[]; detected_answer: { label: string; source: string; confidence: number } | null };
+  existing: { question_id: string; stem_text: string; options: DupOption[]; correct_label: string | null; answer_source: string; status: string; source_exam_title: string | null };
+}
+export interface ConflictResult {
+  status: string; overlap_ratio: number; threshold: number; total: number;
+  duplicate_count: number; new_count: number; duplicates: DuplicateComparison[];
+}
 export interface ReviewQueue { items: QuestionItem[]; total: number }
 export interface QuestionPage { items: QuestionItem[]; total: number; page: number; page_size: number }

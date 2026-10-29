@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -11,7 +12,7 @@ from app.models import (
     AnswerSource, Difficulty, ImportJob, Option, QuestionItem, QuestionStatus,
     QuestionTag, SourceExam, Tag, User,
 )
-from app.parsers.importer import docx_to_html, import_html
+from app.parsers.importer import docx_to_html, run_import
 from app.routers.questions import _out as question_out
 
 router = APIRouter(tags=["imports"])
@@ -28,19 +29,26 @@ def _owned_exam(db: Session, exam_id: uuid.UUID, user: User) -> SourceExam:
 class PasteIn(BaseModel):
     mode: str = "paste_html"
     html: str
+    # Xử lý trùng kiểu Windows: ask (dừng hỏi khi trùng >= 40%) | keep_old | overwrite | decide
+    on_conflict: str = "ask"
+    decisions: dict | None = None  # {dedup_hash: "overwrite"|"keep"} cho on_conflict="decide"
 
 
 @router.post("/api/v1/source-exams/{exam_id}/import", status_code=status.HTTP_201_CREATED)
 def import_paste(exam_id: uuid.UUID, body: PasteIn, db: Session = Depends(get_db),
                  user: User = Depends(get_current_user)):
     exam = _owned_exam(db, exam_id, user)
-    job = import_html(db, exam, body.html, created_by=user.id)
-    return {"import_job_id": str(job.id), "status": job.status, "stats": job.stats,
-            "error_log": job.error_log}
+    result = run_import(db, exam, body.html, created_by=user.id,
+                        on_conflict=body.on_conflict, decisions=body.decisions)
+    if result["status"] == "conflict":
+        return JSONResponse(status_code=200, content=result)
+    return {"import_job_id": result["job_id"], "status": "done", "stats": result["stats"],
+            "error_log": result["error_log"]}
 
 
 @router.post("/api/v1/source-exams/{exam_id}/import-docx", status_code=status.HTTP_201_CREATED)
 async def import_docx(exam_id: uuid.UUID, file: UploadFile = File(...),
+                      on_conflict: str = Form("ask"), decisions_json: str | None = Form(None),
                       db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     exam = _owned_exam(db, exam_id, user)
     if not (file.filename or "").lower().endswith(".docx"):
@@ -49,9 +57,19 @@ async def import_docx(exam_id: uuid.UUID, file: UploadFile = File(...),
         html = docx_to_html(await file.read())
     except Exception:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "File .docx không đọc được")
-    job = import_html(db, exam, html, created_by=user.id)
-    return {"import_job_id": str(job.id), "status": job.status, "stats": job.stats,
-            "error_log": job.error_log}
+    decisions = None
+    if decisions_json:
+        try:
+            import json as _json
+            decisions = _json.loads(decisions_json)
+        except Exception:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "decisions_json không hợp lệ")
+    result = run_import(db, exam, html, created_by=user.id,
+                        on_conflict=on_conflict, decisions=decisions)
+    if result["status"] == "conflict":
+        return JSONResponse(status_code=200, content=result)
+    return {"import_job_id": result["job_id"], "status": "done", "stats": result["stats"],
+            "error_log": result["error_log"]}
 
 
 @router.get("/api/v1/import-jobs/{job_id}")

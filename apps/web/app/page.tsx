@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearToken, getToken, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SourceExam, Tag, Workspace } from "../lib/api";
+import { api, clearToken, getToken, ConflictResult, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SourceExam, Tag, Workspace } from "../lib/api";
 
 export default function Home() {
   const router = useRouter();
@@ -72,28 +72,57 @@ export default function Home() {
   const [revUnit, setRevUnit] = useState<Record<string, string>>({});
   const [revAnswer, setRevAnswer] = useState<Record<string, string>>({});
 
+  // ---- Trùng lặp kiểu Windows Explorer: trùng >= 40% thì dừng hỏi trước khi nạp ----
+  const [conflict, setConflict] = useState<ConflictResult | null>(null);
+  const [decisions, setDecisions] = useState<Record<string, "overwrite" | "keep">>({});
+  const lastSourceRef = useRef<{ kind: "paste"; html: string } | { kind: "docx"; file: File } | null>(null);
+
+  function handleImportResult(r: ImportResult | ConflictResult) {
+    if (r.status === "conflict") {
+      const c = r as ConflictResult;
+      setConflict(c);
+      setDecisions(Object.fromEntries(c.duplicates.map((d) => [d.dedup_hash, "keep" as const])));
+      setImpStats(null);
+    } else {
+      setConflict(null);
+      setImpStats((r as ImportResult).stats);
+      loadQueue(impExamId);
+    }
+  }
+
+  async function runImport(onConflict: string, dec?: Record<string, string>) {
+    const src = lastSourceRef.current;
+    if (!src || !impExamId) return;
+    try {
+      if (src.kind === "paste") {
+        const r = await api<ImportResult | ConflictResult>(`/api/v1/source-exams/${impExamId}/import`, {
+          method: "POST",
+          body: JSON.stringify({ mode: "paste_html", html: src.html, on_conflict: onConflict, decisions: dec || null }),
+        });
+        handleImportResult(r);
+      } else {
+        const fd = new FormData();
+        fd.append("file", src.file);
+        fd.append("on_conflict", onConflict);
+        if (dec) fd.append("decisions_json", JSON.stringify(dec));
+        const r = await api<ImportResult | ConflictResult>(`/api/v1/source-exams/${impExamId}/import-docx`, { method: "POST", body: fd });
+        handleImportResult(r);
+      }
+    } catch (err: any) { setError(err.message); }
+  }
+
   async function doImportPaste() {
     if (!impExamId) { setError("Hãy chọn đề gốc để nạp vào trước"); return; }
     const html = pasteRef.current?.innerHTML || "";
     if (!html.replace(/<[^>]*>/g, "").trim()) { setError("Ô dán đang trống — hãy dán nội dung đề vào"); return; }
-    try {
-      const r = await api<ImportResult>(`/api/v1/source-exams/${impExamId}/import`, {
-        method: "POST", body: JSON.stringify({ mode: "paste_html", html }),
-      });
-      setImpStats(r.stats);
-      loadQueue(impExamId);
-    } catch (err: any) { setError(err.message); }
+    lastSourceRef.current = { kind: "paste", html };
+    runImport("ask");
   }
 
   async function doImportDocx(file: File) {
     if (!impExamId) { setError("Hãy chọn đề gốc để nạp vào trước"); return; }
-    const fd = new FormData();
-    fd.append("file", file);
-    try {
-      const r = await api<ImportResult>(`/api/v1/source-exams/${impExamId}/import-docx`, { method: "POST", body: fd });
-      setImpStats(r.stats);
-      loadQueue(impExamId);
-    } catch (err: any) { setError(err.message); }
+    lastSourceRef.current = { kind: "docx", file };
+    runImport("ask");
   }
 
   const loadQueue = useCallback((examId: string) => {
@@ -221,10 +250,67 @@ export default function Home() {
               Điền mẫu tô đỏ
             </button>
           </div>
+          {conflict && (
+            <div style={{ border: "2px solid #d97706", borderRadius: 12, padding: 16, marginTop: 14, background: "#fffbeb" }}>
+              <h3 style={{ marginTop: 0 }}>⚠ Đề này đã có phần lớn nội dung trong kho</h3>
+              <p>
+                Hệ thống phát hiện <b>{conflict.duplicate_count}/{conflict.total} câu ({Math.round(conflict.overlap_ratio * 100)}%)</b> đã
+                tồn tại trong kho — vượt ngưỡng cảnh báo {Math.round(conflict.threshold * 100)}%. Chưa có gì được nạp.
+                Bạn muốn xử lý các câu trùng thế nào? (Còn <b>{conflict.new_count} câu mới</b> sẽ được nạp trong mọi trường hợp.)
+              </p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                <button style={{ padding: "9px 14px", background: "#b45309", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={() => runImport("overwrite")}>
+                  Ghi đè tất cả câu trùng bằng bản mới
+                </button>
+                <button style={{ padding: "9px 14px", background: "#173a7a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={() => runImport("keep_old")}>
+                  Giữ bản cũ — chỉ nạp {conflict.new_count} câu mới
+                </button>
+                <button style={btn} onClick={() => setConflict(null)}>Huỷ — không nạp gì cả</button>
+              </div>
+              <p style={{ fontSize: 13, color: "#53627f", margin: "4px 0 10px" }}>
+                Hoặc xem từng câu bên dưới, chọn riêng cho từng câu rồi bấm "Áp dụng lựa chọn từng câu". Lưu ý: câu đã duyệt mà bị ghi đè sẽ quay về trạng thái chờ duyệt.
+              </p>
+              {conflict.duplicates.map((d) => (
+                <div key={d.dedup_hash} style={{ border: "1px solid #e5d9b8", borderRadius: 10, padding: 12, marginBottom: 10, background: "#fff" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309" }}>BẢN MỚI NẠP — Câu {d.number}</div>
+                      <div style={{ fontSize: 14, margin: "4px 0" }}>{d.new.stem_text}</div>
+                      <div style={{ fontSize: 13 }}>{d.new.options.map((o) => `${o.label}. ${o.content_text}`).join("   ")}</div>
+                      <div style={{ fontSize: 13, color: "#53627f" }}>
+                        Đáp án nhận diện: {d.new.detected_answer ? `${d.new.detected_answer.label} (${d.new.detected_answer.source})` : "chưa có"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#173a7a" }}>BẢN ĐANG CÓ TRONG KHO</div>
+                      <div style={{ fontSize: 14, margin: "4px 0" }}>{d.existing.stem_text}</div>
+                      <div style={{ fontSize: 13 }}>{d.existing.options.map((o) => `${o.label}. ${o.content_text}`).join("   ")}</div>
+                      <div style={{ fontSize: 13, color: "#53627f" }}>
+                        Từ đề: {d.existing.source_exam_title || "—"} · Trạng thái: {d.existing.status} · Đáp án hiện tại: {d.existing.correct_label || "chưa có"} ({d.existing.answer_source})
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 14 }}>
+                    <label>
+                      <input type="radio" name={`dec-${d.dedup_hash}`} checked={decisions[d.dedup_hash] === "keep"}
+                        onChange={() => setDecisions({ ...decisions, [d.dedup_hash]: "keep" })} /> Giữ bản cũ
+                    </label>
+                    <label>
+                      <input type="radio" name={`dec-${d.dedup_hash}`} checked={decisions[d.dedup_hash] === "overwrite"}
+                        onChange={() => setDecisions({ ...decisions, [d.dedup_hash]: "overwrite" })} /> Ghi đè bằng bản mới
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <button style={{ padding: "9px 14px", background: "#12703a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={() => runImport("decide", decisions)}>
+                Áp dụng lựa chọn từng câu
+              </button>
+            </div>
+          )}
           {impStats && (
             <p style={{ marginTop: 12 }}>
               Kết quả nạp: <b>{impStats.total}</b> câu · có đáp án <b>{impStats.with_answer}</b> · chờ bổ sung đáp án{" "}
-              <b>{impStats.needs_answer}</b> · trùng bỏ qua <b>{impStats.duplicates}</b> · lỗi <b>{impStats.failed}</b>.
+              <b>{impStats.needs_answer}</b> · trùng bỏ qua <b>{impStats.duplicates}</b> · ghi đè <b>{impStats.overwritten}</b> · lỗi <b>{impStats.failed}</b>.
               Sang tab <b>Duyệt câu hỏi</b> để duyệt trước khi dùng sinh đề.
             </p>
           )}

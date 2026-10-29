@@ -42,3 +42,14 @@ không có dấu hiệu mạnh hơn). Kiểm chứng: 5 test hồi quy mới —
 
 ## Sẵn sàng cho Tuần 3 (EB-301 → EB-307)
 AI giải thật cho câu `needs_answer`: hàng đợi Celery, gọi model có structured output, ngưỡng tin cậy < 0,70 khoá nút Duyệt, chống hallucination bằng self-check, tính chi phí.
+
+## Bổ sung theo yêu cầu của Ha (2026-10-29): xử lý trùng kiểu Windows Explorer
+Khi nạp đề, nếu tỉ lệ câu trùng với kho >= 40% thì hệ thống KHÔNG nạp ngay mà dừng lại,
+trả trích lục so sánh từng câu trùng (bản mới vs bản đang có: nội dung, đáp án, trạng thái,
+đề nguồn) để giáo viên quyết định — đúng như hộp thoại thay thế file của Windows:
+- "Ghi đè tất cả" / "Giữ bản cũ — chỉ nạp phần mới" / chọn riêng từng câu (mặc định giữ cũ) / huỷ.
+- Dưới 40%: nạp thẳng như cũ, câu trùng bỏ qua.
+- Ghi đè một câu đã duyệt -> câu đó quay về chờ duyệt (nội dung nền đã đổi); bản mới không có
+  dấu đáp án thì giữ đáp án cũ nếu nội dung phương án đúng còn khớp.
+Kiểm chứng: 5 test riêng (test_import_conflict.py) + smoke HTTP thật (nạp bản không đáp án ->
+nạp lại bản tô đỏ bị dừng ở conflict 100% -> ghi đè -> 4 câu có đáp án, chờ duyệt). pytest 34 passed.
