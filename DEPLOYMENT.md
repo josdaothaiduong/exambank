@@ -1,5 +1,11 @@
 # DEPLOYMENT — Đưa ExamBank lên GitHub & Public Web
 
+> **QUYẾT ĐỊNH ĐÃ CHỐT (2026-10-29, Ha phê duyệt): Phương án A — VPS + Docker + Caddy HTTPS.**
+> Đây là đường deploy production chính thức của ExamBank. Đường B (Vercel + dịch vụ quản trị)
+> chỉ giữ vai trò phương án dự phòng, chỉ xem xét lại khi có 1 trong 3 dấu hiệu ở mục 5
+> (hàng trăm người dùng đồng thời / cần tốc độ toàn cầu / không còn ai trông coi VPS).
+> Hệ quả thực tế: EB-407 (Tuần 4) sẽ deploy staging/production theo Đường A.
+
 ## 0. Nguyên tắc kiến trúc (đọc trước để khỏi chọn sai đường)
 
 ExamBank **không phải** một trang web tĩnh. Nó có 4 phần phải chạy liên tục:
