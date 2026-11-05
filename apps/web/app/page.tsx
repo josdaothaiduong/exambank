@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearToken, getToken, ConflictResult, ExamTemplate, GeneratedExam, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SolveResult, SourceExam, Tag, Workspace } from "../lib/api";
+import { api, clearToken, downloadExamPackage, getToken, ConflictResult, ExamTemplate, GeneratedExam, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SolveResult, SourceExam, Tag, Workspace } from "../lib/api";
 
 export default function Home() {
   const router = useRouter();
@@ -331,7 +331,10 @@ export default function Home() {
           </form>
           {exams.length === 0 && <p>Chưa có đề gốc nào trong workspace này.</p>}
           {exams.map((e) => (
-            <div key={e.id} style={box}><b>{e.title}</b> — Lớp {e.grade} · {e.exam_kind}</div>
+            <div key={e.id} style={{ ...box, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <span><b>{e.title}</b> — Lớp {e.grade} · {e.exam_kind}</span>
+              <button style={btn} onClick={() => downloadExamPackage(e.id).catch((err) => setError(err.message))}>Xuất gói đề</button>
+            </div>
           ))}
         </section>
       )}

@@ -41,6 +41,32 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
+// EL-008 — Tải gói đề (JSON đính kèm) về máy: fetch có gắn JWT như api(),
+// nhưng nhận blob thay vì JSON để trình duyệt lưu file theo Content-Disposition.
+export async function downloadExamPackage(examId: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}/api/v1/source-exams/${examId}/export-package`, { headers });
+  if (res.status === 401) {
+    clearToken();
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+    throw new Error("Phiên đăng nhập đã hết hạn");
+  }
+  if (!res.ok) throw new Error(`Lỗi ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `exam-package-${examId}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export interface Workspace { id: string; name: string; school_name: string | null; owner_id: string }
 export interface SourceExam {
   id: string; workspace_id: string; title: string; grade: number | null;
