@@ -21,7 +21,17 @@ export default function LoginPage() {
       const body = mode === "login" ? { email, password } : { email, password, full_name: fullName };
       const data = await api<{ access_token: string }>(path, { method: "POST", body: JSON.stringify(body) });
       setToken(data.access_token);
-      router.push("/");
+      // Learn: HS/PH vào thẳng khu học tập sau đăng nhập; GV về ExamBank
+      if (mode === "login") {
+        try {
+          const me = await api<{ role: string }>("/api/v1/auth/me");
+          router.push(me.role === "student" || me.role === "parent" ? "/learn" : "/");
+        } catch {
+          router.push("/");
+        }
+      } else {
+        router.push("/");
+      }
     } catch (err: any) {
       setError(err.message || "Đăng nhập thất bại");
     } finally {

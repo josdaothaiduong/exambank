@@ -1,0 +1,28 @@
+/* ExamBank Learn — component classes tối thiểu trên nền tokens (EL-101..104).
+   Chỉ dùng biến token, không gõ hex ngoài thang. */
+.learn-wrap { max-width: 1080px; margin: 0 auto; padding: var(--space-4); }
+.learn-card { background: var(--card); color: var(--card-foreground); border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); padding: var(--space-4); margin-bottom: var(--space-4); }
+.learn-btn { min-height: 48px; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md, 10px); border: 1px solid var(--border); background: var(--card); color: var(--foreground); cursor: pointer; font: inherit; }
+.learn-btn-primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); font-weight: 600; }
+.learn-btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+.learn-input { min-height: 48px; padding: var(--space-2) var(--space-3); border: 1px solid var(--input); border-radius: var(--radius-md, 10px); font: inherit; width: 100%; box-sizing: border-box; background: var(--card); color: var(--foreground); }
+.learn-grid { display: grid; gap: var(--space-3); }
+.learn-row { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.learn-muted { color: var(--muted-foreground); }
+.learn-error { color: var(--destructive); }
+.learn-ok { color: var(--accent-learning); }
+.learn-notyet { color: var(--not-yet); background: var(--not-yet-soft); border-radius: var(--radius-md, 10px); padding: var(--space-2) var(--space-3); }
+.opt-btn { min-width: 52px; min-height: 48px; padding: var(--space-2) var(--space-3); border: 1px solid var(--input); border-radius: var(--radius-md, 10px); background: var(--card); cursor: pointer; font: inherit; font-weight: 600; }
+.opt-btn[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.entry-row { display: grid; grid-template-columns: 64px 1fr; gap: var(--space-3); align-items: center; padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+.radio-card { display: flex; gap: var(--space-3); align-items: flex-start; width: 100%; text-align: left; min-height: 48px; padding: var(--space-3); border: 1px solid var(--input); border-radius: var(--radius-md, 10px); background: var(--card); cursor: pointer; font: inherit; margin-bottom: var(--space-2); }
+.radio-card[aria-checked="true"] { border-color: var(--primary); background: var(--primary-soft); }
+.passage-box { background: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); padding: var(--space-4); margin-bottom: var(--space-4); }
+.sticky-bar { position: sticky; bottom: 0; background: var(--background); padding: var(--space-3) 0; border-top: 1px solid var(--border); }
+.online-cols { display: grid; grid-template-columns: 1fr; gap: var(--space-4); }
+@media (min-width: 1024px) {
+  .online-cols { grid-template-columns: 1fr 1fr; align-items: start; }
+  .online-passages { position: sticky; top: var(--space-4); max-height: 85vh; overflow: auto; }
+}
+table.learn-table { border-collapse: collapse; width: 100%; }
+table.learn-table th, table.learn-table td { border-bottom: 1px solid var(--border); padding: var(--space-2); text-align: left; }
