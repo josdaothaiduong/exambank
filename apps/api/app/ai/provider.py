@@ -14,9 +14,13 @@ import httpx
 from app.ai.prompts import SYSTEM_PROMPT
 
 # Giá tham khảo USD / 1M token (input, output) để ước tính chi phí — cập nhật khi đổi model.
+# Gemini: giá paid tier tra 2026-11-05 (ai.google.dev); free tier thì chi phí thực = 0,
+# số này chỉ để ước lượng khi so sánh. Dòng gemini-2.5 đã đóng với người dùng mới.
 PRICE_PER_MTOK = {
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o": (2.50, 10.00),
+    "gemini-3.5-flash-lite": (0.30, 2.50),
+    "gemini-3.8-flash": (0.75, 3.75),
     "demo-rule-solver": (0.0, 0.0),
 }
 

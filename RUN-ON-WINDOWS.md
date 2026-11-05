@@ -43,9 +43,13 @@ Mặc định hệ thống chạy AI ở chế độ demo (offline, độ chính
    ```
    AI_PROVIDER=openai
    AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-   AI_MODEL=gemini-2.5-flash
+   AI_MODEL=gemini-3.5-flash-lite
    AI_API_KEY=<dán key Google của bạn vào đây>
    ```
+
+Lưu ý: dòng model `gemini-2.5-flash` đã bị Google đóng với tài khoản mới
+   (từ cuối 2026) — dùng `gemini-3.5-flash-lite` như trên. Key này dùng chung
+   cho cả AI giải đề (ExamBank) và AI bẻ hạt học tập (ExamBank Learn).
 
 3. Lưu file, chạy `stop-exambank.bat` rồi `start-exambank.bat` để áp dụng.
 
