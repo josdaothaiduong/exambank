@@ -44,9 +44,6 @@ from app.routers import exams as exams_router  # noqa: E402
 
 app.include_router(exams_router.router)
 
-from app.routers import learn as learn_router  # noqa: E402
-
-app.include_router(learn_router.router)
 
 
 @app.get("/health")
