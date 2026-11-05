@@ -22,6 +22,7 @@ def _out(q: QuestionItem, db: Session) -> dict:
         "source_exam_id": str(q.source_exam_id) if q.source_exam_id else None,
         "passage_id": str(q.passage_id) if q.passage_id else None,
         "question_type": q.question_type,
+        "order_in_source": q.order_in_source,
         "stem_html": q.stem_html, "stem_text": q.stem_text,
         "status": q.status.value if hasattr(q.status, "value") else q.status,
         "difficulty": q.difficulty.value if q.difficulty and hasattr(q.difficulty, "value") else q.difficulty,

@@ -100,7 +100,15 @@ def solve_batch(db: Session, questions: list[QuestionItem], provider: BaseProvid
     stats = {"total": len(questions), "solved": 0, "failed": 0,
              "low_confidence": 0, "cost_usd": 0.0, "results": []}
     for q in questions:
-        r = solve_question(db, q, provider)
+        qid = str(q.id)
+        try:
+            # SAVEPOINT theo từng câu: 1 câu lỗi lạ chỉ rollback chính nó,
+            # không làm sập cả mẻ và không cuốn theo các câu đã giải xong.
+            with db.begin_nested():
+                r = solve_question(db, q, provider)
+        except Exception as e:
+            r = {"question_id": qid, "status": "failed",
+                 "error": f"Lỗi bất ngờ khi giải câu: {e}"}
         stats["results"].append(r)
         if r["status"] == "solved":
             stats["solved"] += 1
