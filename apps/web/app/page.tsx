@@ -503,6 +503,7 @@ export default function Home() {
                 <div style={{ color: "#53627f", fontSize: 13 }}>
                   Trạng thái: {q.status} · Nguồn đáp án: {q.answer_source}
                   {q.answer_confidence != null ? ` · độ tin cậy ${Math.round(q.answer_confidence * 100)}%` : ""}
+                  {q.order_in_source != null ? ` · Câu số ${q.order_in_source} trong đề gốc` : ""}
                 </div>
                 {q.ai_solution && (
                   <div style={{ background: q.ai_solution.confidence >= 0.7 ? "#f5f0ff" : "#fef2f2", border: "1px solid #ddd0fa", borderRadius: 8, padding: 10, marginTop: 8, fontSize: 13 }}>

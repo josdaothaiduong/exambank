@@ -22,7 +22,12 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   };
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  } catch {
+    throw new Error("Không kết nối được với máy chủ ExamBank. Hãy kiểm tra Docker Desktop đang chạy (hoặc chạy lại start-exambank.bat), rồi tải lại trang.");
+  }
   if (res.status === 401) {
     clearToken();
     if (typeof window !== "undefined" && window.location.pathname !== "/login") {
@@ -47,7 +52,12 @@ export async function downloadExamPackage(examId: string): Promise<void> {
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${API_URL}/api/v1/source-exams/${examId}/export-package`, { headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/v1/source-exams/${examId}/export-package`, { headers });
+  } catch {
+    throw new Error("Không kết nối được với máy chủ ExamBank. Hãy kiểm tra Docker Desktop đang chạy (hoặc chạy lại start-exambank.bat), rồi tải lại trang.");
+  }
   if (res.status === 401) {
     clearToken();
     if (typeof window !== "undefined" && window.location.pathname !== "/login") {
@@ -76,7 +86,7 @@ export interface Tag { id: string; kind: string; code: string; label: string }
 export interface QuestionItem {
   id: string; question_type: string; stem_text: string; status: string;
   difficulty: string | null; answer_source: string; answer_confidence: number | null;
-  correct_option_id: string | null; stem_html?: string;
+  correct_option_id: string | null; stem_html?: string; order_in_source?: number | null;
   ai_solution?: { model: string; confidence: number; explanation_html: string | null; suggested_difficulty: string | null; suggested_tags: string[] } | null; passage_text?: string | null; passage_html?: string | null; tags: string[];
   options: { id: string; label: string; content_text: string; content_html?: string }[];
 }
