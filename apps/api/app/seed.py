@@ -38,14 +38,6 @@ def seed_taxonomy(db: Session) -> dict:
             "total_in_db": db.query(Tag).count()}
 
 
-if __name__ == "__main__":
-    with SessionLocal() as session:
-        result = seed_taxonomy(session)
-        tpl_result = seed_templates(session)
-    print("Seed taxonomy:", result)
-    print("Seed templates:", tpl_result)
-
-
 # ---------------------------------------------------------------------------
 # EB-401 — 3 template đề hệ thống (is_system=True), idempotent theo tên.
 # difficulty_mix là TỈ LỆ theo từng phần; tag_filter để trống = toàn kho của workspace.
@@ -112,3 +104,13 @@ def seed_templates(db: Session) -> dict:
             created += 1
     db.commit()
     return {"created": created, "total_system": db.query(ExamTemplate).filter_by(is_system=True).count()}
+
+
+# Điểm vào khi chạy `python -m app.seed` — PHẢI nằm cuối file, sau mọi định
+# nghĩa hàm (đặt giữa file từng gây NameError làm api không khởi động được).
+if __name__ == "__main__":
+    with SessionLocal() as session:
+        result = seed_taxonomy(session)
+        tpl_result = seed_templates(session)
+    print("Seed taxonomy:", result)
+    print("Seed templates:", tpl_result)
