@@ -821,6 +821,97 @@ class LookupCache(Base):
     hit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+# =====================================================================
+# ExamBank Learn — Sprint 2 (EL-201/EL-204)
+# 3 bảng bổ sung mà DB-API-SPEC chưa đặc tả (spec giao endpoint S5-S7/T7-T13
+# cho Sprint 2 nhưng không có bảng chứa nội dung hậu-đề, tiến độ hậu-đề và
+# lượt làm biến thể) — ghi rõ là lệch spec đã được lấp ở migration 0004:
+# - post_test_contents: nội dung hậu-đề 4 bước của 1 câu (AI sinh, GV duyệt —
+#   cùng kỷ luật vòng đời như learning_atoms; khoá chẩn đoán/cặp tối thiểu nằm
+#   trong content_json, CHỈ server đọc khi chấm, không rời server nguyên dạng).
+# - post_test_progress: tiến độ 4 bước của 1 HS x 1 câu trong 1 attempt.
+# - variant_attempts: mỗi lượt HS trả lời 1 biến thể (chấm server). Kết quả
+#   CHƯA đẩy vào FSRS ở Sprint 2 (Sprint 3 mới nối review_cards/review_logs).
+# =====================================================================
+
+_PT_STATUS_CK = "status IN ('pending_review','approved','rejected','archived')"
+
+
+class PostTestContent(Base):
+    """Nội dung hậu-đề 4 bước cho 1 câu hỏi — 1 hàng/câu (UQ question_id)."""
+    __tablename__ = "post_test_contents"
+    __table_args__ = (
+        CheckConstraint(_PT_STATUS_CK, name="ck_post_test_contents_status"),
+        CheckConstraint("origin IN ('ai_generated','teacher_created','rule_based')",
+                        name="ck_post_test_contents_origin"),
+        CheckConstraint(_PROVENANCE_CK, name="ck_post_test_contents_provenance"),
+        UniqueConstraint("question_id", name="uq_post_test_contents_question"),
+        Index("ix_post_test_contents_workspace_status", "workspace_id", "status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("question_items.id", ondelete="CASCADE"), nullable=False)
+    # content_json: {error_code, why_wrong, diagnosis_options:[{key,text}],
+    #   correct_diagnosis_key, cue, rule, why_correct,
+    #   minimal_pair:[{key,text,is_correct}]}
+    content_json: Mapped[dict] = mapped_column(_jsonb(), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending_review")
+    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_provenance: Mapped[str] = mapped_column(Text, nullable=False)
+    ai_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
+    needs_teacher_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class PostTestProgress(Base):
+    """Tiến độ hậu-đề 4 bước: 1 hàng = 1 attempt x 1 câu của 1 HS."""
+    __tablename__ = "post_test_progress"
+    __table_args__ = (
+        CheckConstraint("current_step BETWEEN 0 AND 4", name="ck_pt_progress_step"),
+        CheckConstraint("status IN ('in_progress','completed')", name="ck_pt_progress_status"),
+        UniqueConstraint("attempt_id", "question_id", name="uq_pt_progress_attempt_question"),
+        Index("ix_pt_progress_student", "student_user_id", "status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    attempt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attempts.id", ondelete="CASCADE"), nullable=False)
+    question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("question_items.id", ondelete="CASCADE"), nullable=False)
+    student_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    current_step: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)  # số bước đã xong
+    step1_choice_key: Mapped[str | None] = mapped_column(Text)
+    step1_correct: Mapped[bool | None] = mapped_column(Boolean)
+    step3_selected_keys: Mapped[list | None] = mapped_column(_jsonb())
+    step3_correct: Mapped[bool | None] = mapped_column(Boolean)
+    step4_variant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("variant_items.id"))
+    step4_correct: Mapped[bool | None] = mapped_column(Boolean)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="in_progress")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class VariantAttempt(Base):
+    """1 lượt HS trả lời 1 biến thể — chấm ở server, idempotent theo client_uuid."""
+    __tablename__ = "variant_attempts"
+    __table_args__ = (
+        Index("ix_variant_attempts_student_variant", "student_user_id", "variant_id"),
+        Index("ix_variant_attempts_attempt", "attempt_id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    student_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("variant_items.id", ondelete="CASCADE"), nullable=False)
+    attempt_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("attempts.id", ondelete="CASCADE"))  # NULL = làm tự do (Sprint 3)
+    selected_variant_option_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("variant_options.id"))
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    client_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class ApiUsageLog(Base):
     """L5 — sổ gọi API ngoài có key/trả phí (hạn mức + đối soát chi phí)."""
     __tablename__ = "api_usage_logs"

@@ -7,6 +7,9 @@ interface StudentRow { student_user_id: string; display_name: string; birth_year
 interface CreatedStudent { display_name: string; login_email: string; student_code: string; initial_password_once: string }
 interface EnrollReq { id: string; display_name: string; birth_year: number | null; status: string; message: string | null }
 interface AssignmentRow { id: string; title: string; mode: string; status: string; question_count: number | null }
+interface AtomRow { id: string; headword: string; atom_type: string; front_text: string; back_text: string; meaning_vi: string; priority: string; common_error_code: string | null; status: string; origin: string; ai_confidence: number | null; needs_teacher_confirmation: boolean; source_question_stem: string | null; sources: { source_role: string }[]; variants: { id: string; variant_tier: string; status: string }[] }
+interface VariantRow { id: string; variant_tier: string; stem_text: string; status: string; correct_option_id: string | null; options: { option_id: string; label: string; content_text: string }[] }
+interface ContentRow { id: string; question_id: string; question_stem: string | null; status: string; ai_confidence: number | null; needs_teacher_confirmation: boolean; content: { error_code: string | null; why_wrong: string; cue: string; rule: string } }
 interface SourceExam { id: string; title: string }
 interface Workspace { id: string; name: string }
 
@@ -30,6 +33,15 @@ export default function TeacherLearnPage() {
   const [one, setOne] = useState({ display_name: "", birth_year: 2009 });
   const [bulk, setBulk] = useState("");
   const [asg, setAsg] = useState({ source_exam_id: "", exam_version_id: "", mode: "paper_quick_entry", opens_at: plusDays(0), due_at: plusDays(1), answer_release_at: plusDays(1) });
+  // --- Kho hạt (EL-202/203/204)
+  const [atoms, setAtoms] = useState<AtomRow[]>([]);
+  const [atomStatus, setAtomStatus] = useState("pending_review");
+  const [pendingAtoms, setPendingAtoms] = useState(0);
+  const [contents, setContents] = useState<ContentRow[]>([]);
+  const [pendingContents, setPendingContents] = useState(0);
+  const [genExamId, setGenExamId] = useState("");
+  const [editAtom, setEditAtom] = useState<AtomRow | null>(null);
+  const [variantsByAtom, setVariantsByAtom] = useState<Record<string, VariantRow[]>>({});
 
   const loadClasses = useCallback(async () => {
     try {
@@ -104,6 +116,124 @@ export default function TeacherLearnPage() {
       const p = await api<AssignmentRow>(`/api/v1/learn/assignments/${a.id}/publish`, { method: "POST", body: "{}" });
       setMsg(`Đã giao & publish "${p.title}" (${p.question_count} câu) cho lớp ${cls.name}`);
       await loadClassDetail(cls);
+    } catch (e: any) { setError(e.message); }
+  }
+
+  // --- Kho hạt: tải/duyệt/sinh (EL-202/203/204)
+  const loadAtoms = useCallback(async (st: string) => {
+    try {
+      const r = await api<{ items: AtomRow[]; pending_total: number }>(`/api/v1/learn/atoms?status=${st}&limit=200`);
+      setAtoms(r.items); setPendingAtoms(r.pending_total);
+    } catch (e: any) { setError(e.message); }
+  }, []);
+
+  const loadContents = useCallback(async () => {
+    try {
+      const r = await api<{ items: ContentRow[]; pending_total: number }>("/api/v1/learn/post-test-contents?limit=200");
+      setContents(r.items); setPendingContents(r.pending_total);
+    } catch (e: any) { setError(e.message); }
+  }, []);
+
+  useEffect(() => { loadAtoms(atomStatus); loadContents(); }, [atomStatus, loadAtoms, loadContents]);
+
+  async function approveWithConfirm(url: string) {
+    try {
+      await api(url, { method: "POST", body: JSON.stringify({ confirm_answer: false }) });
+    } catch (e: any) {
+      if (String(e.message).includes("TEACHER_CONFIRMATION_REQUIRED")) {
+        if (!window.confirm("Nội dung này suy từ câu chưa có đáp án chắc chắn. Thầy cô xác nhận đáp án là đúng?")) throw e;
+        await api(url, { method: "POST", body: JSON.stringify({ confirm_answer: true }) });
+      } else if (String(e.message).includes("ATOM_LOW_CONFIDENCE")) {
+        throw new Error("Độ tin cậy AI < 0,70 — hãy bấm 'Xem' mở nội dung trước khi duyệt.");
+      } else throw e;
+    }
+  }
+
+  async function atomAction(a: AtomRow, action: "approve" | "reject") {
+    setError(""); setMsg("");
+    try {
+      if (action === "approve") await approveWithConfirm(`/api/v1/learn/atoms/${a.id}/approve`);
+      else await api(`/api/v1/learn/atoms/${a.id}/reject`, { method: "POST", body: "{}" });
+      setMsg(`${action === "approve" ? "Đã duyệt" : "Đã loại"} hạt "${a.headword}"`);
+      await loadAtoms(atomStatus);
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function viewAtom(a: AtomRow) {
+    try {
+      const full = await api<AtomRow>(`/api/v1/learn/atoms/${a.id}`);
+      setEditAtom(full);
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function saveAtomEdit() {
+    if (!editAtom) return;
+    try {
+      await api(`/api/v1/learn/atoms/${editAtom.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ headword: editAtom.headword, front_text: editAtom.front_text, back_text: editAtom.back_text, meaning_vi: editAtom.meaning_vi, priority: editAtom.priority }),
+      });
+      setEditAtom(null); setMsg("Đã lưu hạt (nếu hạt đã duyệt, nó quay về chờ duyệt lại).");
+      await loadAtoms(atomStatus);
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function bulkApproveP1() {
+    const ids = atoms.filter((a) => a.status === "pending_review" && a.priority === "P1").map((a) => a.id);
+    if (!ids.length) { setMsg("Không có hạt P1 đang chờ duyệt trong danh sách."); return; }
+    try {
+      const r = await api<{ approved: string[]; skipped: { atom_id: string; code: string }[] }>("/api/v1/learn/atoms/bulk-approve", {
+        method: "POST", body: JSON.stringify({ atom_ids: ids }),
+      });
+      setMsg(`Duyệt nhanh: ${r.approved.length} hạt đạt${r.skipped.length ? `, bỏ qua ${r.skipped.length} hạt (${r.skipped.map((s) => s.code).join(", ")})` : ""}`);
+      await loadAtoms(atomStatus);
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function generateAtomsForExam() {
+    if (!genExamId) return;
+    setError(""); setMsg("");
+    try {
+      const r = await api<{ eligible_questions: number; atoms_created: number; atoms_total: number; cap: number }>(
+        `/api/v1/learn/source-exams/${genExamId}/atom-generation`, { method: "POST", body: JSON.stringify({ force: false }) });
+      setMsg(`Đã bẻ hạt: ${r.eligible_questions} câu đạt chuẩn, tạo mới ${r.atoms_created} hạt (tổng ${r.atoms_total}/${r.cap}). Hạt đang chờ duyệt ở dưới.`);
+      await loadAtoms(atomStatus); await loadContents();
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function toggleVariants(a: AtomRow) {
+    if (variantsByAtom[a.id]) { setVariantsByAtom((m) => { const n = { ...m }; delete n[a.id]; return n; }); return; }
+    try {
+      const r = await api<{ items: VariantRow[] }>(`/api/v1/learn/variants?atom_id=${a.id}`);
+      setVariantsByAtom((m) => ({ ...m, [a.id]: r.items }));
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function genVariantP2(a: AtomRow) {
+    try {
+      const r = await api<{ variant_id: string | null; status: string }>(`/api/v1/learn/atoms/${a.id}/variant-generation-jobs`, {
+        method: "POST", body: JSON.stringify({ force: false }),
+      });
+      setMsg(`Biến thể P2 cho "${a.headword}": ${r.status}${r.variant_id ? "" : " (chưa sinh được)"}`);
+      const vr = await api<{ items: VariantRow[] }>(`/api/v1/learn/variants?atom_id=${a.id}`);
+      setVariantsByAtom((m) => ({ ...m, [a.id]: vr.items }));
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function variantAction(atomId: string, v: VariantRow, action: "approve" | "reject") {
+    try {
+      if (action === "approve") await approveWithConfirm(`/api/v1/learn/variants/${v.id}/approve`);
+      else await api(`/api/v1/learn/variants/${v.id}/reject`, { method: "POST", body: "{}" });
+      const vr = await api<{ items: VariantRow[] }>(`/api/v1/learn/variants?atom_id=${atomId}`);
+      setVariantsByAtom((m) => ({ ...m, [atomId]: vr.items }));
+    } catch (e: any) { setError(e.message); }
+  }
+
+  async function contentAction(ct: ContentRow, action: "approve" | "reject") {
+    try {
+      if (action === "approve") await approveWithConfirm(`/api/v1/learn/post-test-contents/${ct.id}/approve`);
+      else await api(`/api/v1/learn/post-test-contents/${ct.id}/reject`, { method: "POST", body: "{}" });
+      await loadContents();
     } catch (e: any) { setError(e.message); }
   }
 
@@ -216,6 +346,87 @@ export default function TeacherLearnPage() {
           </section>
         </>
       )}
+
+      <section className="learn-card">
+        <h2 className="text-h2">Kho hạt & hậu-đề <span className="learn-muted">({pendingAtoms} hạt + {pendingContents} nội dung hậu-đề đang chờ duyệt)</span></h2>
+        <div className="learn-row">
+          <select className="learn-input" style={{ maxWidth: 320 }} value={genExamId} onChange={(e) => setGenExamId(e.target.value)}>
+            <option value="">— chọn đề gốc để bẻ hạt —</option>
+            {sources.map((s) => (<option key={s.id} value={s.id}>{s.title}</option>))}
+          </select>
+          <button className="learn-btn learn-btn-primary" onClick={generateAtomsForExam} disabled={!genExamId}>Bẻ hạt từ đề này (AI)</button>
+          <span className="learn-muted">Sinh 1 lần/câu, tối đa 3 hạt/câu, 120 hạt/đề. Hạt chưa duyệt không tới được học sinh.</span>
+        </div>
+
+        <div className="learn-row" style={{ marginTop: 16 }}>
+          <b>Lọc hạt:</b>
+          {["pending_review", "approved", "rejected"].map((st) => (
+            <button key={st} className="learn-btn" aria-pressed={atomStatus === st} onClick={() => setAtomStatus(st)}>
+              {st === "pending_review" ? "Chờ duyệt" : st === "approved" ? "Đã duyệt" : "Đã loại"}
+            </button>
+          ))}
+          <button className="learn-btn" onClick={bulkApproveP1}>Duyệt nhanh các hạt P1 đang hiện</button>
+        </div>
+
+        {atoms.map((a) => (
+          <div key={a.id} style={{ borderBottom: "1px solid var(--border)", padding: "10px 0" }}>
+            <div className="learn-row" style={{ justifyContent: "space-between" }}>
+              <span><b>{a.headword}</b> · {a.atom_type} · {a.priority}{a.common_error_code ? ` · lỗi ${a.common_error_code}` : ""}
+                {" · "}<span className="learn-muted">nguồn: {a.sources.map((s) => s.source_role).join(", ") || "câu gốc"}{a.ai_confidence !== null ? ` · AI tin cậy ${a.ai_confidence}` : ""}{a.needs_teacher_confirmation ? " · CẦN XÁC NHẬN ĐÁP ÁN" : ""}</span></span>
+              <span className="learn-row">
+                <button className="learn-btn" onClick={() => viewAtom(a)}>Xem / Sửa</button>
+                {a.status !== "approved" && <button className="learn-btn learn-btn-primary" onClick={() => atomAction(a, "approve")}>Duyệt</button>}
+                {a.status !== "rejected" && <button className="learn-btn" onClick={() => atomAction(a, "reject")}>Loại</button>}
+                <button className="learn-btn" onClick={() => toggleVariants(a)}>Biến thể ({a.variants.length})</button>
+                {a.status === "approved" && <button className="learn-btn" onClick={() => genVariantP2(a)}>Sinh biến thể P2</button>}
+              </span>
+            </div>
+            <div className="learn-muted" style={{ marginTop: 4 }}>Câu gốc: {a.source_question_stem}</div>
+            <div>Mặt hỏi: {a.front_text}</div>
+            <div>Mặt đáp án: {a.back_text}</div>
+            <div className="learn-muted">Nghĩa: {a.meaning_vi}</div>
+            {editAtom?.id === a.id && (
+              <div className="learn-grid" style={{ marginTop: 8 }}>
+                <input className="learn-input" value={editAtom.headword} onChange={(e) => setEditAtom({ ...editAtom, headword: e.target.value })} placeholder="headword" />
+                <textarea className="learn-input" rows={2} value={editAtom.front_text} onChange={(e) => setEditAtom({ ...editAtom, front_text: e.target.value })} placeholder="Mặt hỏi" />
+                <textarea className="learn-input" rows={2} value={editAtom.back_text} onChange={(e) => setEditAtom({ ...editAtom, back_text: e.target.value })} placeholder="Mặt đáp án" />
+                <input className="learn-input" value={editAtom.meaning_vi} onChange={(e) => setEditAtom({ ...editAtom, meaning_vi: e.target.value })} placeholder="Nghĩa Việt" />
+                <select className="learn-input" value={editAtom.priority} onChange={(e) => setEditAtom({ ...editAtom, priority: e.target.value })}>
+                  <option>P1</option><option>P2</option><option>P3</option>
+                </select>
+                <span className="learn-row">
+                  <button className="learn-btn learn-btn-primary" onClick={saveAtomEdit}>Lưu hạt</button>
+                  <button className="learn-btn" onClick={() => setEditAtom(null)}>Đóng</button>
+                </span>
+              </div>
+            )}
+            {variantsByAtom[a.id]?.map((v) => (
+              <div key={v.id} className="learn-row" style={{ justifyContent: "space-between", marginLeft: 16, marginTop: 6 }}>
+                <span>{v.variant_tier === "T2" ? "P2 (ngữ cảnh mới)" : "P1 (cơ học)"} · {v.status} — {v.stem_text} <span className="learn-muted">({v.options.map((o) => `${o.label}.${o.content_text}`).join(" · ")})</span></span>
+                <span className="learn-row">
+                  {v.status !== "approved" && <button className="learn-btn learn-btn-primary" onClick={() => variantAction(a.id, v, "approve")}>Duyệt biến thể</button>}
+                  {v.status !== "rejected" && <button className="learn-btn" onClick={() => variantAction(a.id, v, "reject")}>Loại</button>}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
+        {!atoms.length && <p className="learn-muted">Không có hạt ở trạng thái này.</p>}
+
+        <h3 className="text-h3" style={{ marginTop: 20 }}>Nội dung hậu-đề (4 bước) chờ duyệt</h3>
+        {contents.filter((ct) => ct.status === "pending_review").map((ct) => (
+          <div key={ct.id} style={{ borderBottom: "1px solid var(--border)", padding: "8px 0" }}>
+            <div className="learn-muted">Câu: {ct.question_stem}{ct.needs_teacher_confirmation ? " · CẦN XÁC NHẬN ĐÁP ÁN" : ""}</div>
+            <div>Vì sao sai: {ct.content.why_wrong}</div>
+            <div>Cue: {ct.content.cue} · Quy tắc: {ct.content.rule}</div>
+            <span className="learn-row" style={{ marginTop: 6 }}>
+              <button className="learn-btn learn-btn-primary" onClick={() => contentAction(ct, "approve")}>Duyệt hậu-đề</button>
+              <button className="learn-btn" onClick={() => contentAction(ct, "reject")}>Loại</button>
+            </span>
+          </div>
+        ))}
+        {!contents.some((ct) => ct.status === "pending_review") && <p className="learn-muted">Không có nội dung hậu-đề đang chờ duyệt.</p>}
+      </section>
     </main>
   );
 }

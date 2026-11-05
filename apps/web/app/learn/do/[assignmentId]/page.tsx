@@ -210,6 +210,13 @@ export default function DoAssignmentPage({ params }: { params: { assignmentId: s
               <br />Đáp án mở lúc {new Date(att.answer_release_at).toLocaleString("vi-VN")} — quay lại sau để xem đúng/sai từng câu nhé.
             </p>
           )}
+          {result.answer_released && att.attempt_id && (
+            <p style={{ marginTop: 12 }}>
+              <Link href={`/learn/review/${att.attempt_id}`}>
+                <button className="learn-btn learn-btn-primary">Xem lại câu sai (hậu-đề 4 bước)</button>
+              </Link>
+            </p>
+          )}
           <Link href="/learn">← Về Đề của tôi</Link>
         </section>
       )}

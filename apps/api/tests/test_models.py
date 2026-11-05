@@ -14,10 +14,12 @@ EXPECTED = {
     "audit_logs", "ai_generation_jobs",
     # 4 bảng phụ EL-007 (L4 quản trị + L5 tích hợp)
     "enrollment_requests", "student_admin_records", "lookup_cache", "api_usage_logs",
+    # 3 bảng Sprint 2 (EL-201/EL-204): nội dung hậu-đề + tiến độ + lượt làm biến thể
+    "post_test_contents", "post_test_progress", "variant_attempts",
 }
 
 
-def test_schema_has_exactly_39_tables():
+def test_schema_has_exactly_42_tables():
     assert set(Base.metadata.tables.keys()) == EXPECTED
 
 

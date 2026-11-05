@@ -26,11 +26,14 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user
+from app.learn import content_pipeline
 from app.models import (
-    Assignment, Attempt, AttemptItem, ClassMembership, ConsentRecord,
-    EnrollmentRequest, Exam, ExamItem, ExamVersion, LearnClass, Option,
-    ParentLink, ParentProfile, PassageGroup, QuestionItem, QuestionStatus,
-    SourceExam, StudentProfile, User, Workspace,
+    AIGenerationJob, Assignment, AtomSource, Attempt, AttemptItem, AuditLog,
+    ClassMembership, ConsentRecord, EnrollmentRequest, Exam, ExamItem,
+    ExamVersion, LearnClass, LearningAtom, Option, ParentLink, ParentProfile,
+    PassageGroup, PostTestContent, PostTestProgress, QuestionItem,
+    QuestionStatus, SourceExam, StudentProfile, User, VariantAttempt,
+    VariantItem, VariantOption, Workspace,
 )
 from app.security import hash_password
 
@@ -1110,3 +1113,813 @@ def get_attempt_result(attempt_id: uuid.UUID, db: Session = Depends(get_db),
         out = _result_payload(db, att, a)
         return out
     return _result_payload(db, att, a)
+
+
+# ==================================================== Sprint 2 — EL-202/203:
+# bẻ hạt (pipeline), kho hạt + duyệt, biến thể. Mọi nội dung AI sinh ra đều
+# pending_review; cổng duyệt 0,70 theo spec T10/T12 (Master Plan Sprint 2).
+
+class AtomGenerationIn(BaseModel):
+    max_atoms: int = Field(default=3, ge=1, le=3)
+    force: bool = False
+
+
+class ExamGenerationIn(BaseModel):
+    force: bool = False
+
+
+class AtomPatchIn(BaseModel):
+    headword: str | None = None
+    atom_type: str | None = None
+    front_text: str | None = None
+    back_text: str | None = None
+    meaning_vi: str | None = None
+    meaning_en: str | None = None
+    example_sentence: str | None = None
+    priority: str | None = Field(default=None, pattern="^(P1|P2|P3)$")
+    common_error_code: str | None = None
+
+
+class ApproveIn(BaseModel):
+    confirm_answer: bool = False
+
+
+class BulkApproveIn(BaseModel):
+    atom_ids: list[uuid.UUID]
+
+
+class VariantGenerationIn(BaseModel):
+    force: bool = False
+
+
+class PostTestContentPatchIn(BaseModel):
+    error_code: str | None = None
+    why_wrong: str | None = None
+    cue: str | None = None
+    rule: str | None = None
+    why_correct: str | None = None
+
+
+def _teacher_question(db: Session, user: User, question_id: uuid.UUID) -> QuestionItem:
+    q = db.get(QuestionItem, question_id)
+    if q is None:
+        raise not_found("Không tìm thấy câu hỏi")
+    get_owned = teacher_workspace(db, user)
+    if q.workspace_id != get_owned.id:
+        raise not_found("Không tìm thấy câu hỏi")
+    return q
+
+
+def _teacher_atom(db: Session, user: User, atom_id: uuid.UUID) -> LearningAtom:
+    atom = db.get(LearningAtom, atom_id)
+    ws = teacher_workspace(db, user)
+    if atom is None or atom.workspace_id != ws.id:
+        raise not_found("Không tìm thấy hạt học tập")
+    return atom
+
+
+def _teacher_variant(db: Session, user: User, variant_id: uuid.UUID) -> VariantItem:
+    var = db.get(VariantItem, variant_id)
+    ws = teacher_workspace(db, user)
+    if var is None or var.workspace_id != ws.id:
+        raise not_found("Không tìm thấy biến thể")
+    return var
+
+
+def _teacher_content(db: Session, user: User, content_id: uuid.UUID) -> PostTestContent:
+    pc = db.get(PostTestContent, content_id)
+    ws = teacher_workspace(db, user)
+    if pc is None or pc.workspace_id != ws.id:
+        raise not_found("Không tìm thấy nội dung hậu-đề")
+    return pc
+
+
+def _mark_viewed(db: Session, user: User, target_type: str, target_id: uuid.UUID):
+    """Ghi nhận GV đã mở xem 1 nội dung (cơ chế cổng 0,70 — spec T9/T10)."""
+    db.add(AuditLog(workspace_id=teacher_workspace(db, user).id,
+                    actor_user_id=user.id, action=f"{target_type}_view",
+                    target_type=target_type, target_id=target_id,
+                    event_metadata={}))
+    db.flush()
+
+
+def _was_viewed(db: Session, user: User, target_type: str, target_id: uuid.UUID) -> bool:
+    return (db.query(AuditLog)
+            .filter_by(actor_user_id=user.id, action=f"{target_type}_view",
+                       target_type=target_type, target_id=target_id)
+            .first()) is not None
+
+
+def _approve_gate(db: Session, user: User, obj, target_type: str,
+                  confirm_answer: bool) -> str | None:
+    """Trả mã lỗi nếu chưa được duyệt, None nếu qua cổng (spec T10)."""
+    if (obj.origin == "ai_generated" and obj.ai_confidence is not None
+            and float(obj.ai_confidence) < 0.70
+            and not _was_viewed(db, user, target_type, obj.id)):
+        return "ATOM_LOW_CONFIDENCE"
+    if getattr(obj, "needs_teacher_confirmation", False) and not confirm_answer:
+        return "TEACHER_CONFIRMATION_REQUIRED"
+    return None
+
+
+def _do_approve(db: Session, user: User, obj):
+    obj.status = "approved"
+    obj.reviewed_by = user.id
+    obj.reviewed_at = _now()
+
+
+def _do_reject(db: Session, user: User, obj):
+    obj.status = "rejected"
+    obj.reviewed_by = user.id
+    obj.reviewed_at = _now()
+
+
+def _atom_out(db: Session, atom: LearningAtom, detail: bool = False) -> dict:
+    q = db.get(QuestionItem, atom.source_question_id)
+    sources = [{"question_id": str(s.question_id), "source_role": s.source_role,
+                "source_exam_id": str(s.source_exam_id) if s.source_exam_id else None}
+               for s in db.query(AtomSource).filter_by(atom_id=atom.id).all()]
+    variants = (db.query(VariantItem).filter_by(parent_atom_id=atom.id)
+                .order_by(VariantItem.created_at).all())
+    out = {"id": str(atom.id), "workspace_id": str(atom.workspace_id),
+           "headword": atom.headword, "atom_type": atom.atom_type,
+           "front_text": atom.front_text, "back_text": atom.back_text,
+           "meaning_vi": atom.meaning_vi, "meaning_en": atom.meaning_en,
+           "example_sentence": atom.example_sentence,
+           "source_sentence": atom.source_sentence,
+           "priority": atom.priority, "common_error_code": atom.common_error_code,
+           "cefr_level": atom.cefr_level,
+           "source_question_id": str(atom.source_question_id),
+           "source_question_stem": q.stem_text if q else None,
+           "source_exam_id": str(q.source_exam_id) if q and q.source_exam_id else None,
+           "status": atom.status, "origin": atom.origin,
+           "answer_provenance": atom.answer_provenance,
+           "ai_confidence": float(atom.ai_confidence) if atom.ai_confidence is not None else None,
+           "needs_teacher_confirmation": atom.needs_teacher_confirmation,
+           "sources": sources,
+           "variants": [{"id": str(v.id), "variant_tier": v.variant_tier,
+                         "status": v.status} for v in variants]}
+    if detail:
+        out["reviewed_by"] = str(atom.reviewed_by) if atom.reviewed_by else None
+        out["reviewed_at"] = _aware(atom.reviewed_at).isoformat() if atom.reviewed_at else None
+    return out
+
+
+def _variant_out(db: Session, var: VariantItem) -> dict:
+    options = (db.query(VariantOption).filter_by(variant_id=var.id)
+               .order_by(VariantOption.position).all())
+    return {"id": str(var.id), "parent_atom_id": str(var.parent_atom_id) if var.parent_atom_id else None,
+            "parent_question_id": str(var.parent_question_id) if var.parent_question_id else None,
+            "variant_tier": var.variant_tier, "stem_text": var.stem_text,
+            "options": [{"option_id": str(o.id), "label": o.label,
+                         "content_text": o.content_text} for o in options],
+            "correct_option_id": str(var.correct_option_id) if var.correct_option_id else None,
+            "status": var.status, "origin": var.origin,
+            "ai_confidence": float(var.ai_confidence) if var.ai_confidence is not None else None,
+            "answer_provenance": var.answer_provenance,
+            "needs_teacher_confirmation": False}
+
+
+@router.post("/questions/{question_id}/atom-generation-jobs",
+             status_code=status.HTTP_201_CREATED)
+def create_atom_generation_job(question_id: uuid.UUID, body: AtomGenerationIn,
+                               db: Session = Depends(get_db),
+                               user: User = Depends(get_current_user)):
+    """EL-202 (spec T7 — chạy đồng bộ như luồng AI hiện có của ExamBank thay vì
+    202 nền/Celery; job vẫn được ghi vào ai_generation_jobs)."""
+    require_role(user, "teacher")
+    q = _teacher_question(db, user, question_id)
+    if q.status != QuestionStatus.approved or not q.correct_option_id:
+        raise err(status.HTTP_422_UNPROCESSABLE_ENTITY, "QUESTIONS_NOT_APPROVED",
+                  "Chỉ bẻ hạt từ câu đã approved và có đáp án đúng",
+                  question_ids=[str(q.id)])
+    result = content_pipeline.generate_for_question(
+        db, q, user, max_atoms=body.max_atoms, force=body.force)
+    db.commit()
+    return result
+
+
+@router.post("/source-exams/{exam_id}/atom-generation")
+def generate_exam_atoms(exam_id: uuid.UUID, body: ExamGenerationIn,
+                        db: Session = Depends(get_db),
+                        user: User = Depends(get_current_user)):
+    """EL-202 cấp đề: sinh cho mọi câu đạt chuẩn của đề gốc, trần 120 atom/đề."""
+    require_role(user, "teacher")
+    exam = db.get(SourceExam, exam_id)
+    ws = teacher_workspace(db, user)
+    if exam is None or exam.workspace_id != ws.id:
+        raise not_found("Không tìm thấy đề gốc")
+    result = content_pipeline.generate_for_exam(db, exam, user, force=body.force)
+    db.commit()
+    return result
+
+
+@router.get("/atoms")
+def list_atoms(db: Session = Depends(get_db), user: User = Depends(get_current_user),
+               status_filter: str | None = Query(default=None, alias="status"),
+               priority: str | None = None,
+               atom_type: str | None = None,
+               source_question_id: uuid.UUID | None = None,
+               source_exam_id: uuid.UUID | None = None,
+               limit: int = Query(default=100, le=200), offset: int = 0):
+    require_role(user, "teacher")
+    ws = teacher_workspace(db, user)
+    query = db.query(LearningAtom).filter_by(workspace_id=ws.id)
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if priority:
+        query = query.filter_by(priority=priority)
+    if atom_type:
+        query = query.filter_by(atom_type=atom_type)
+    if source_question_id:
+        query = query.filter_by(source_question_id=source_question_id)
+    if source_exam_id:
+        qids = [q.id for q in db.query(QuestionItem)
+                .filter_by(source_exam_id=source_exam_id).all()]
+        query = query.filter(LearningAtom.source_question_id.in_(qids))
+    total = query.count()
+    rows = (query.order_by(LearningAtom.priority, LearningAtom.created_at)
+            .offset(offset).limit(limit).all())
+    pending_total = (db.query(LearningAtom)
+                     .filter_by(workspace_id=ws.id, status="pending_review").count())
+    return {"items": [_atom_out(db, a) for a in rows], "total": total,
+            "pending_total": pending_total}
+
+
+@router.post("/atoms/bulk-approve")
+def bulk_approve_atoms(body: BulkApproveIn, db: Session = Depends(get_db),
+                       user: User = Depends(get_current_user)):
+    """Spec T12: duyệt nhanh theo lô — atom dưới cổng 0,70/chưa xác nhận bị
+    loại vào danh sách skipped kèm mã, không fail cả lô."""
+    require_role(user, "teacher")
+    approved, skipped = [], []
+    for atom_id in body.atom_ids:
+        atom = db.get(LearningAtom, atom_id)
+        ws = teacher_workspace(db, user)
+        if atom is None or atom.workspace_id != ws.id:
+            skipped.append({"atom_id": str(atom_id), "code": "NOT_FOUND"})
+            continue
+        if atom.status == "approved":
+            approved.append(str(atom.id))
+            continue
+        gate = _approve_gate(db, user, atom, "atom", confirm_answer=False)
+        if gate:
+            skipped.append({"atom_id": str(atom.id), "code": gate})
+            continue
+        _do_approve(db, user, atom)
+        approved.append(str(atom.id))
+    db.commit()
+    return {"approved": approved, "skipped": skipped}
+
+
+@router.get("/atoms/{atom_id}")
+def get_atom(atom_id: uuid.UUID, db: Session = Depends(get_db),
+             user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    atom = _teacher_atom(db, user, atom_id)
+    _mark_viewed(db, user, "atom", atom.id)
+    db.commit()
+    return _atom_out(db, atom, detail=True)
+
+
+@router.patch("/atoms/{atom_id}")
+def patch_atom(atom_id: uuid.UUID, body: AtomPatchIn,
+               db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    atom = _teacher_atom(db, user, atom_id)
+    was_approved = atom.status == "approved"
+    for field in ("headword", "atom_type", "meaning_vi", "meaning_en",
+                  "example_sentence", "priority", "common_error_code"):
+        value = getattr(body, field)
+        if value is not None:
+            setattr(atom, field, value)
+    if body.front_text is not None:
+        atom.front_text = body.front_text
+        atom.front_html = content_pipeline._p(body.front_text)
+    if body.back_text is not None:
+        atom.back_text = body.back_text
+        atom.back_html = content_pipeline._p(body.back_text)
+    if was_approved:
+        # Spec T11: sửa atom đã duyệt -> về chờ duyệt lại (thẻ ôn liên quan sẽ
+        # suspended ở Sprint 3 — chưa có thẻ nào được tạo ở Sprint 2).
+        atom.status = "pending_review"
+        atom.reviewed_by = None
+        atom.reviewed_at = None
+    _mark_viewed(db, user, "atom", atom.id)
+    db.commit()
+    db.refresh(atom)
+    return _atom_out(db, atom, detail=True)
+
+
+@router.post("/atoms/{atom_id}/approve")
+def approve_atom(atom_id: uuid.UUID, body: ApproveIn,
+                 db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    atom = _teacher_atom(db, user, atom_id)
+    gate = _approve_gate(db, user, atom, "atom", body.confirm_answer)
+    if gate == "ATOM_LOW_CONFIDENCE":
+        raise err(status.HTTP_422_UNPROCESSABLE_ENTITY, "ATOM_LOW_CONFIDENCE",
+                  "Atom AI có độ tin cậy < 0,70 — mở xem nội dung trước khi duyệt")
+    if gate:
+        raise err(status.HTTP_422_UNPROCESSABLE_ENTITY, gate,
+                  "Atom suy từ câu chưa có đáp án chắc chắn — GV cần xác nhận đáp án tường minh",
+                  )
+    _do_approve(db, user, atom)
+    db.commit()
+    db.refresh(atom)
+    return _atom_out(db, atom, detail=True)
+
+
+@router.post("/atoms/{atom_id}/reject")
+def reject_atom(atom_id: uuid.UUID, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    atom = _teacher_atom(db, user, atom_id)
+    _do_reject(db, user, atom)
+    db.commit()
+    db.refresh(atom)
+    return _atom_out(db, atom, detail=True)
+
+
+@router.post("/atoms/{atom_id}/variant-generation-jobs",
+             status_code=status.HTTP_201_CREATED)
+def create_variant_generation_job(atom_id: uuid.UUID, body: VariantGenerationIn,
+                                  db: Session = Depends(get_db),
+                                  user: User = Depends(get_current_user)):
+    """EL-204: sinh biến thể P2 (tier T2, ngữ cảnh mới) cho 1 atom."""
+    require_role(user, "teacher")
+    atom = _teacher_atom(db, user, atom_id)
+    if atom.status == "rejected":
+        raise err(status.HTTP_422_UNPROCESSABLE_ENTITY, "ATOM_REJECTED",
+                  "Không sinh biến thể cho atom đã bị loại")
+    result = content_pipeline.generate_variant_p2(db, atom, user, force=body.force)
+    db.commit()
+    return result
+
+
+@router.get("/variants")
+def list_variants(db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user),
+                  atom_id: uuid.UUID | None = None,
+                  status_filter: str | None = Query(default=None, alias="status"),
+                  tier: str | None = None):
+    require_role(user, "teacher")
+    ws = teacher_workspace(db, user)
+    query = db.query(VariantItem).filter_by(workspace_id=ws.id)
+    if atom_id:
+        query = query.filter_by(parent_atom_id=atom_id)
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if tier:
+        query = query.filter_by(variant_tier=tier)
+    rows = query.order_by(VariantItem.created_at).all()
+    return {"items": [_variant_out(db, v) for v in rows], "total": len(rows)}
+
+
+@router.get("/variants/{variant_id}")
+def get_variant(variant_id: uuid.UUID, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    var = _teacher_variant(db, user, variant_id)
+    _mark_viewed(db, user, "variant", var.id)
+    db.commit()
+    return _variant_out(db, var)
+
+
+@router.post("/variants/{variant_id}/approve")
+def approve_variant(variant_id: uuid.UUID, body: ApproveIn,
+                    db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    var = _teacher_variant(db, user, variant_id)
+    gate = _approve_gate(db, user, var, "variant", body.confirm_answer)
+    if gate:
+        raise err(status.HTTP_422_UNPROCESSABLE_ENTITY, gate,
+                  "Biến thể chưa qua được cổng duyệt (độ tin cậy/xác nhận)")
+    if not var.correct_option_id:
+        raise err(status.HTTP_422_UNPROCESSABLE_ENTITY, "VARIANT_NO_ANSWER",
+                  "Biến thể chưa có đáp án đúng — không được duyệt")
+    _do_approve(db, user, var)
+    db.commit()
+    db.refresh(var)
+    return _variant_out(db, var)
+
+
+@router.post("/variants/{variant_id}/reject")
+def reject_variant(variant_id: uuid.UUID, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    var = _teacher_variant(db, user, variant_id)
+    _do_reject(db, user, var)
+    db.commit()
+    db.refresh(var)
+    return _variant_out(db, var)
+
+
+def _content_out(db: Session, pc: PostTestContent) -> dict:
+    q = db.get(QuestionItem, pc.question_id)
+    return {"id": str(pc.id), "question_id": str(pc.question_id),
+            "question_stem": q.stem_text if q else None,
+            "content": pc.content_json, "status": pc.status,
+            "origin": pc.origin, "answer_provenance": pc.answer_provenance,
+            "ai_confidence": float(pc.ai_confidence) if pc.ai_confidence is not None else None,
+            "needs_teacher_confirmation": pc.needs_teacher_confirmation}
+
+
+@router.get("/post-test-contents")
+def list_post_test_contents(db: Session = Depends(get_db),
+                            user: User = Depends(get_current_user),
+                            status_filter: str | None = Query(default=None, alias="status"),
+                            question_id: uuid.UUID | None = None):
+    require_role(user, "teacher")
+    ws = teacher_workspace(db, user)
+    query = db.query(PostTestContent).filter_by(workspace_id=ws.id)
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if question_id:
+        query = query.filter_by(question_id=question_id)
+    rows = query.order_by(PostTestContent.created_at).all()
+    return {"items": [_content_out(db, pc) for pc in rows], "total": len(rows),
+            "pending_total": db.query(PostTestContent)
+            .filter_by(workspace_id=ws.id, status="pending_review").count()}
+
+
+@router.get("/post-test-contents/{content_id}")
+def get_post_test_content(content_id: uuid.UUID, db: Session = Depends(get_db),
+                          user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    pc = _teacher_content(db, user, content_id)
+    _mark_viewed(db, user, "post_test_content", pc.id)
+    db.commit()
+    return _content_out(db, pc)
+
+
+@router.patch("/post-test-contents/{content_id}")
+def patch_post_test_content(content_id: uuid.UUID, body: PostTestContentPatchIn,
+                            db: Session = Depends(get_db),
+                            user: User = Depends(get_current_user)):
+    """GV sửa phần chữ của nội dung hậu-đề (khoá chấm giữ nguyên)."""
+    require_role(user, "teacher")
+    pc = _teacher_content(db, user, content_id)
+    content = dict(pc.content_json)
+    for field in ("error_code", "why_wrong", "cue", "rule", "why_correct"):
+        value = getattr(body, field)
+        if value is not None:
+            content[field] = value
+    pc.content_json = content
+    if pc.status == "approved":
+        pc.status = "pending_review"
+        pc.reviewed_by = None
+        pc.reviewed_at = None
+    _mark_viewed(db, user, "post_test_content", pc.id)
+    db.commit()
+    db.refresh(pc)
+    return _content_out(db, pc)
+
+
+@router.post("/post-test-contents/{content_id}/approve")
+def approve_post_test_content(content_id: uuid.UUID, body: ApproveIn,
+                              db: Session = Depends(get_db),
+                              user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    pc = _teacher_content(db, user, content_id)
+    gate = _approve_gate(db, user, pc, "post_test_content", body.confirm_answer)
+    if gate:
+        raise err(status.HTTP_422_UNPROCESSABLE_ENTITY, gate,
+                  "Nội dung hậu-đề chưa qua được cổng duyệt (độ tin cậy/xác nhận)")
+    _do_approve(db, user, pc)
+    db.commit()
+    db.refresh(pc)
+    return _content_out(db, pc)
+
+
+@router.post("/post-test-contents/{content_id}/reject")
+def reject_post_test_content(content_id: uuid.UUID, db: Session = Depends(get_db),
+                             user: User = Depends(get_current_user)):
+    require_role(user, "teacher")
+    pc = _teacher_content(db, user, content_id)
+    _do_reject(db, user, pc)
+    db.commit()
+    db.refresh(pc)
+    return _content_out(db, pc)
+
+
+# ==================================================== Sprint 2 — EL-201/204 phía HS:
+# hậu-đề 4 bước + chấm biến thể. Khoá từng bước kiểm ở SERVER: bước sau chỉ mở
+# khi bước trước đã hoàn thành (progress.current_step), không chỉ ẩn ở UI.
+
+class PostTestStepIn(BaseModel):
+    step: int = Field(ge=1, le=3)
+    choice_key: str | None = None        # bước 1: chẩn đoán
+    selected_keys: list[str] | None = None  # bước 3: cặp tối thiểu
+
+
+class VariantAnswerIn(BaseModel):
+    variant_id: uuid.UUID
+    selected_variant_option_id: uuid.UUID | None = None
+    client_uuid: uuid.UUID
+
+
+class VariantAnswerFreeIn(BaseModel):
+    selected_variant_option_id: uuid.UUID | None = None
+    client_uuid: uuid.UUID
+
+
+def _student_post_test_attempt(db: Session, user: User,
+                               attempt_id: uuid.UUID) -> tuple[Attempt, Assignment]:
+    require_role(user, "student")
+    att = db.get(Attempt, attempt_id)
+    if att is None or att.student_user_id != user.id:
+        raise not_found("Không tìm thấy attempt")
+    require_learning_access(db, user)
+    a = db.get(Assignment, att.assignment_id)
+    if att.status not in ("submitted", "graded"):
+        raise err(status.HTTP_409_CONFLICT, "ATTEMPT_NOT_SUBMITTED",
+                  "Nộp bài trước khi xem phần hậu-đề")
+    if not _released(a) and not a.show_score_immediately:
+        raise err(status.HTTP_403_FORBIDDEN, "ANSWER_NOT_RELEASED",
+                  "Đáp án và phần giải thích chưa mở",
+                  release_at=_aware(a.answer_release_at).isoformat())
+    return att, a
+
+
+def _attempt_item(db: Session, att: Attempt, question_id: uuid.UUID) -> AttemptItem:
+    item = db.query(AttemptItem).filter_by(
+        attempt_id=att.id, question_id=question_id).one_or_none()
+    if item is None or item.is_correct is None:
+        raise not_found("Không tìm thấy câu trong bài làm")
+    if item.is_correct and item.confidence_level not in (1, 2):
+        # Câu đúng + chắc chắn: không có hậu-đề (Master Plan Core Loop [4]).
+        raise not_found("Câu này đã đúng và chắc chắn — không có phần hậu-đề")
+    return item
+
+
+def _approved_content(db: Session, question_id: uuid.UUID) -> PostTestContent | None:
+    return (db.query(PostTestContent)
+            .filter_by(question_id=question_id, status="approved").one_or_none())
+
+
+def _progress_of(db: Session, att: Attempt, question_id: uuid.UUID,
+                 create: bool = False) -> PostTestProgress | None:
+    prog = db.query(PostTestProgress).filter_by(
+        attempt_id=att.id, question_id=question_id).one_or_none()
+    if prog is None and create:
+        a = db.get(Assignment, att.assignment_id)
+        prog = PostTestProgress(workspace_id=a.workspace_id, attempt_id=att.id,
+                                question_id=question_id,
+                                student_user_id=att.student_user_id)
+        db.add(prog)
+        db.flush()
+    return prog
+
+
+def _progress_out(prog: PostTestProgress | None) -> dict:
+    if prog is None:
+        return {"current_step": 0, "status": "in_progress",
+                "step1_correct": None, "step3_correct": None, "step4_correct": None}
+    return {"current_step": prog.current_step, "status": prog.status,
+            "step1_correct": prog.step1_correct,
+            "step3_correct": prog.step3_correct,
+            "step4_correct": prog.step4_correct}
+
+
+def _option_brief(db: Session, option_id: uuid.UUID | None) -> dict | None:
+    if option_id is None:
+        return None
+    o = db.get(Option, option_id)
+    if o is None:
+        return None
+    return {"option_id": str(o.id), "label": o.label, "content_text": o.content_text}
+
+
+def _step4_variant(db: Session, question_id: uuid.UUID) -> VariantItem | None:
+    """Biến thể P2 (T2) đã duyệt của 1 atom đã duyệt của câu — chỉ 1 đường tới HS."""
+    atom_ids = [a.id for a in db.query(LearningAtom)
+                .filter_by(source_question_id=question_id, status="approved").all()]
+    if not atom_ids:
+        return None
+    return (db.query(VariantItem)
+            .filter(VariantItem.parent_atom_id.in_(atom_ids),
+                    VariantItem.variant_tier == "T2",
+                    VariantItem.status == "approved",
+                    VariantItem.correct_option_id.isnot(None))
+            .order_by(VariantItem.created_at).first())
+
+
+def _variant_student_out(db: Session, var: VariantItem) -> dict:
+    options = (db.query(VariantOption).filter_by(variant_id=var.id)
+               .order_by(VariantOption.position).all())
+    return {"variant_id": str(var.id), "stem_text": var.stem_text,
+            "options": [{"option_id": str(o.id), "label": o.label,
+                         "content_text": o.content_text} for o in options]}
+
+
+def _grade_variant_answer(db: Session, user: User, var: VariantItem,
+                          selected_option_id, client_uuid,
+                          attempt_id=None) -> dict:
+    """Chấm biến thể ở server + ghi variant_attempts (idempotent theo client_uuid).
+
+    Kết quả CHƯA đẩy vào FSRS ở Sprint 2 (không tạo review_cards/review_logs).
+    """
+    existing = db.query(VariantAttempt).filter_by(client_uuid=client_uuid).one_or_none()
+    if existing is not None:
+        if existing.student_user_id != user.id or existing.variant_id != var.id:
+            raise not_found("Không tìm thấy lượt làm biến thể")
+        return {"variant_id": str(var.id), "is_correct": existing.is_correct,
+                "variant_attempt_id": str(existing.id), "idempotent": True}
+    if selected_option_id is not None:
+        opt = db.get(VariantOption, selected_option_id)
+        if opt is None or opt.variant_id != var.id:
+            raise err(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR",
+                      "Phương án không thuộc biến thể này")
+    is_correct = bool(selected_option_id is not None
+                      and var.correct_option_id is not None
+                      and selected_option_id == var.correct_option_id)
+    va = VariantAttempt(workspace_id=var.workspace_id, student_user_id=user.id,
+                        variant_id=var.id, attempt_id=attempt_id,
+                        selected_variant_option_id=selected_option_id,
+                        is_correct=is_correct, client_uuid=client_uuid)
+    db.add(va)
+    db.flush()
+    return {"variant_id": str(var.id), "is_correct": is_correct,
+            "variant_attempt_id": str(va.id), "idempotent": False}
+
+
+@router.get("/attempts/{attempt_id}/post-test")
+def post_test_list(attempt_id: uuid.UUID, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    att, a = _student_post_test_attempt(db, user, attempt_id)
+    items = {i.question_id: i for i in
+             db.query(AttemptItem).filter_by(attempt_id=att.id).all()}
+    out = []
+    for q in _attempt_questions(att, a):
+        qid = uuid.UUID(q["question_id"])
+        item = items.get(qid)
+        if item is None or item.is_correct is None:
+            continue
+        if item.is_correct and item.confidence_level not in (1, 2):
+            continue
+        qq = db.get(QuestionItem, qid)
+        pc = _approved_content(db, qid)
+        prog = _progress_of(db, att, qid)
+        out.append({
+            "question_id": q["question_id"], "position": q["position"],
+            "question_type": q["question_type"],
+            "stem_html": q["stem_html"], "stem_text": q["stem_text"],
+            "kind": "wrong" if not item.is_correct else "correct_unsure",
+            "your_option": _option_brief(db, item.selected_option_id),
+            "correct_option": _option_brief(db, qq.correct_option_id if qq else None),
+            "content_status": "ready" if pc else "preparing",
+            "progress": _progress_out(prog)})
+    return {"attempt_id": str(att.id), "assignment_id": str(a.id),
+            "title": a.title, "items": out}
+
+
+@router.get("/attempts/{attempt_id}/post-test/{question_id}")
+def post_test_detail(attempt_id: uuid.UUID, question_id: uuid.UUID,
+                     db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    att, a = _student_post_test_attempt(db, user, attempt_id)
+    item = _attempt_item(db, att, question_id)
+    qq = db.get(QuestionItem, question_id)
+    prog = _progress_of(db, att, question_id, create=True)
+    db.commit()
+    base = {"question_id": str(question_id),
+            "stem_html": qq.stem_html if qq else None,
+            "stem_text": qq.stem_text if qq else None,
+            "kind": "wrong" if not item.is_correct else "correct_unsure",
+            "your_option": _option_brief(db, item.selected_option_id),
+            "correct_option": _option_brief(db, qq.correct_option_id if qq else None),
+            "progress": _progress_out(prog)}
+    pc = _approved_content(db, question_id)
+    if pc is None:
+        # Chưa có nội dung đã duyệt -> 'đang chuẩn bị', tuyệt đối không bịa.
+        base["content_status"] = "preparing"
+        base["steps"] = None
+        return base
+    c = pc.content_json
+    step = prog.current_step
+    steps: dict = {
+        "step1": {"why_wrong": c["why_wrong"],
+                  "diagnosis_options": c["diagnosis_options"]},
+        "step2": {"locked": step < 1},
+        "step3": {"locked": step < 2},
+        "step4": {"locked": step < 3},
+    }
+    if step >= 1:
+        steps["step2"].update({"cue": c["cue"], "rule": c["rule"],
+                               "why_correct": c["why_correct"]})
+    if step >= 2:
+        steps["step3"]["statements"] = [
+            {"key": s["key"], "text": s["text"]} for s in c["minimal_pair"]]
+    if step >= 3:
+        var = _step4_variant(db, question_id)
+        steps["step4"]["variant"] = (_variant_student_out(db, var)
+                                     if var else None)
+    base["content_status"] = "ready"
+    base["error_code"] = c.get("error_code")
+    base["steps"] = steps
+    return base
+
+
+@router.post("/attempts/{attempt_id}/post-test/{question_id}/step")
+def post_test_step(attempt_id: uuid.UUID, question_id: uuid.UUID,
+                   body: PostTestStepIn, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    att, a = _student_post_test_attempt(db, user, attempt_id)
+    _attempt_item(db, att, question_id)
+    pc = _approved_content(db, question_id)
+    if pc is None:
+        raise err(status.HTTP_409_CONFLICT, "CONTENT_NOT_READY",
+                  "Nội dung hậu-đề của câu này đang được chuẩn bị")
+    c = pc.content_json
+    prog = _progress_of(db, att, question_id, create=True)
+    if body.step == 1:
+        if body.choice_key is None:
+            raise err(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR",
+                      "Bước 1 cần choice_key")
+        is_correct = body.choice_key == c["correct_diagnosis_key"]
+        prog.step1_choice_key = body.choice_key
+        prog.step1_correct = is_correct
+        if is_correct and prog.current_step < 1:
+            prog.current_step = 1
+        db.commit()
+        return {"step": 1, "is_correct": is_correct,
+                "progress": _progress_out(prog)}
+    if body.step == 2:
+        if prog.current_step < 1:
+            raise err(status.HTTP_409_CONFLICT, "STEP_LOCKED",
+                      "Hoàn thành bước 1 trước khi mở bước 2")
+        if prog.current_step < 2:
+            prog.current_step = 2
+        db.commit()
+        return {"step": 2, "is_correct": None, "progress": _progress_out(prog)}
+    # bước 3
+    if prog.current_step < 2:
+        raise err(status.HTTP_409_CONFLICT, "STEP_LOCKED",
+                  "Hoàn thành bước 2 trước khi làm bước 3")
+    if body.selected_keys is None:
+        raise err(status.HTTP_400_BAD_REQUEST, "VALIDATION_ERROR",
+                  "Bước 3 cần selected_keys")
+    correct_keys = {s["key"] for s in c["minimal_pair"] if s["is_correct"]}
+    is_correct = set(body.selected_keys) == correct_keys
+    prog.step3_selected_keys = list(body.selected_keys)
+    prog.step3_correct = is_correct
+    if is_correct and prog.current_step < 3:
+        prog.current_step = 3
+    db.commit()
+    return {"step": 3, "is_correct": is_correct, "progress": _progress_out(prog)}
+
+
+@router.post("/attempts/{attempt_id}/post-test/{question_id}/variant-answer")
+def post_test_variant_answer(attempt_id: uuid.UUID, question_id: uuid.UUID,
+                             body: VariantAnswerIn,
+                             db: Session = Depends(get_db),
+                             user: User = Depends(get_current_user)):
+    """Bước 4 của hậu-đề: làm biến thể P2 — server chấm, đúng mới hoàn thành."""
+    att, a = _student_post_test_attempt(db, user, attempt_id)
+    _attempt_item(db, att, question_id)
+    prog = _progress_of(db, att, question_id, create=True)
+    if prog.current_step < 3:
+        raise err(status.HTTP_409_CONFLICT, "STEP_LOCKED",
+                  "Hoàn thành bước 3 trước khi làm biến thể ở bước 4")
+    var = _step4_variant(db, question_id)
+    if var is None or var.id != body.variant_id:
+        raise not_found("Không tìm thấy biến thể cho câu này")
+    result = _grade_variant_answer(db, user, var, body.selected_variant_option_id,
+                                   body.client_uuid, attempt_id=att.id)
+    prog.step4_variant_id = var.id
+    prog.step4_correct = result["is_correct"]
+    if result["is_correct"]:
+        prog.current_step = 4
+        prog.status = "completed"
+        prog.completed_at = _now()
+    db.commit()
+    result["progress"] = _progress_out(prog)
+    return result
+
+
+@router.post("/variants/{variant_id}/answer")
+def answer_variant_free(variant_id: uuid.UUID, body: VariantAnswerFreeIn,
+                        db: Session = Depends(get_db),
+                        user: User = Depends(get_current_user)):
+    """API chấm biến thể độc lập (Sprint 3 dùng lại cho phiên ôn/probe).
+
+    Chỉ biến thể approved của atom approved mới tới được HS.
+    """
+    require_role(user, "student")
+    require_learning_access(db, user)
+    var = db.get(VariantItem, variant_id)
+    if var is None or var.status != "approved" or not var.correct_option_id:
+        raise not_found("Không tìm thấy biến thể")
+    if var.parent_atom_id is not None:
+        atom = db.get(LearningAtom, var.parent_atom_id)
+        if atom is None or atom.status != "approved":
+            raise not_found("Không tìm thấy biến thể")
+    result = _grade_variant_answer(db, user, var,
+                                   body.selected_variant_option_id,
+                                   body.client_uuid, attempt_id=None)
+    db.commit()
+    return result
