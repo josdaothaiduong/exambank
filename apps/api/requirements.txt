@@ -4,7 +4,9 @@ sqlalchemy==2.0.*
 psycopg[binary]==3.2.*
 alembic==1.13.*
 pydantic-settings==2.*
-celery[redis]==5.4.*
+celery==5.4.*
+# Khong dung extra celery[redis]: extra do ghim redis<6, xung dot voi kombu>=5.6
+# (transport Redis cua kombu doi hoi redis-py>=6.1). Tu ghim redis o dong duoi.
 redis>=6.1,<7
 python-multipart==0.0.*
 pgvector==0.3.*
