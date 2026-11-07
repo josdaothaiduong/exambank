@@ -39,6 +39,22 @@ def test_golden_files_all():
     print(f"Golden: {total_q} questions, {correct_ans} expected answers detected exactly")
 
 
+def test_glued_option_labels_are_split():
+    """Nhãn B/D dính vào chữ cuối của phương án trước khi dán từ Word ("modernB.")
+    khiến regex chặt chỉ thấy [A, C] — parser phải tách đúng 4 phương án, text sạch,
+    để GV chọn được đáp án B/D khi duyệt."""
+    html = ("<p>Question 1: Choose the correct order of adjectives. "
+            "A. ideal spacious modernB. modern spacious ideal "
+            "C. spacious modern idealD. ideal modern spacious</p>")
+    out = parse_exam_html(html)
+    assert len(out["questions"]) == 1
+    q = out["questions"][0]
+    assert [o["label"] for o in q["options"]] == ["A", "B", "C", "D"]
+    assert [o["text"] for o in q["options"]] == [
+        "ideal spacious modern", "modern spacious ideal",
+        "spacious modern ideal", "ideal modern spacious"]
+
+
 def test_golden_passage_not_split_from_questions():
     out = parse_exam_html((GOLDEN / "exam2_highlight.html").read_text())
     assert out["passages"][0]["question_numbers"] == [1, 2, 3]

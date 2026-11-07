@@ -13,6 +13,7 @@ from app.models import (
     QuestionTag, SourceExam, Tag, User,
 )
 from app.parsers.importer import docx_to_html, run_import
+from app.parsers.option_repair import repair_glued_options
 from app.routers.questions import _out as question_out
 
 router = APIRouter(tags=["imports"])
@@ -93,6 +94,10 @@ def review_queue(exam_id: uuid.UUID, db: Session = Depends(get_db),
         .order_by(QuestionItem.order_in_source).all())
     items = []
     for r in rows:
+        # Dữ liệu cũ nạp trước khi parser xử lý được nhãn dính: tự lành tại chỗ
+        # để GV thấy đủ 4 phương án và chọn được đáp án B/D.
+        if repair_glued_options(db, r):
+            db.commit()
         out = question_out(r, db)
         if r.passage_id:
             from app.models import PassageGroup

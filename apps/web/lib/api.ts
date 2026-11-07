@@ -103,7 +103,7 @@ export interface ConflictResult {
   duplicate_count: number; new_count: number; duplicates: DuplicateComparison[];
 }
 export interface ReviewQueue { items: QuestionItem[]; total: number }
-export interface SolveResult { mode: string; provider: string; model: string; total: number; solved: number; failed: number; low_confidence: number; cost_usd: number }
+export interface SolveResult { mode: string; provider: string; model: string; total: number; solved?: number; failed?: number; low_confidence?: number; cost_usd?: number; task_id?: string }
 export interface QuestionPage { items: QuestionItem[]; total: number; page: number; page_size: number }
 
 export interface TemplateSection { name: string; question_type: string; passage_type: string | null; question_count: number; difficulty_mix: Record<string, number> }

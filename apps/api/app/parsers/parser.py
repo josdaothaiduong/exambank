@@ -28,6 +28,42 @@ _QUESTION_HEAD = re.compile(rf"^(?:Question|Câu){_GAP}({_NUM}){_GAP}[:\.]\s*", 
 # Phần đuôi dùng lookahead (?=\s|$) — KHÔNG tiêu thụ khoảng trắng, nếu không dấu cách đó
 # vừa là đuôi của phương án trước vừa là đầu của phương án sau sẽ làm mất 1 phương án.
 _OPTION_MARKS = re.compile(rf"(?:^|\s|\]\])([A-D]){_GAP}\.(?=\s|$)")
+# Regex nới lỏng cho nhãn bị DÍNH vào chữ cuối của phương án trước khi dán từ Word
+# ("ideal spacious modernB. modern spacious ideal") — nhãn không còn đứng sau khoảng trắng
+# nên regex chặt bỏ sót, câu chỉ còn 2 phương án A/C và GV không chọn được đáp án B/D.
+_OPTION_MARKS_LOOSE = re.compile(rf"([A-D]){_GAP}\.(?=\s|$)")
+
+
+def _is_continuous_from_a(labels) -> bool:
+    return bool(labels) and labels == [chr(ord("A") + i) for i in range(len(labels))]
+
+
+def _option_marks(body: str):
+    """Tìm marker phương án trong thân câu.
+
+    Hành vi cũ giữ nguyên khi marker chặt đã cho dãy nhãn liên tục từ A. Chỉ khi dãy
+    KHÔNG liên tục (vd [A, C] vì B/D bị dính) mới thử regex nới lỏng, và chỉ chấp nhận
+    kết quả nới lỏng khi nhãn tạo thành dãy liên tục từ A (ưu tiên đủ A,B,C,D, dãy dài
+    nhất; bằng độ dài thì lấy dãy sau — khớp logic cửa sổ cuối ở nơi gọi)."""
+    marks = list(_OPTION_MARKS.finditer(body))
+    labels = [m.group(1) for m in marks]
+    head = labels[:4]
+    if len(labels) >= 2 and len(head) == min(len(labels), 4) and _is_continuous_from_a(head):
+        return marks
+    loose = list(_OPTION_MARKS_LOOSE.finditer(body))
+    best = None
+    for i, m in enumerate(loose):
+        if m.group(1) != "A":
+            continue
+        run = [m]
+        for nxt in loose[i + 1:]:
+            if nxt.group(1) == chr(ord("A") + len(run)):
+                run.append(nxt)
+                if len(run) == 4:
+                    break
+        if len(run) >= 2 and (best is None or len(run) >= len(best)):
+            best = run
+    return best if best else marks
 _ANSWER_KEY_HEAD = re.compile(r"(ĐÁP\s*ÁN|ANSWER\s*KEY)\s*:?", re.I)
 _ANSWER_KEY_PAIR = re.compile(r"(\d+)\s*[\.\)\-:]\s*([A-D])\b|(\d+)\s*([A-D])\b")
 _LABEL_ONLY = re.compile(r"^[A-D]\.?$")
@@ -294,7 +330,7 @@ def parse_exam_html(html: str) -> dict:
         if sec and sec.start() > 0:
             pending_chunks.append(body[sec.start():])
             body = body[: sec.start()]
-        marks = list(_OPTION_MARKS.finditer(body))
+        marks = _option_marks(body)
         if len(marks) < 2:
             questions.append({
                 "number": num, "stem": _markers_to_text(body.strip()),
@@ -317,7 +353,7 @@ def parse_exam_html(html: str) -> dict:
             cut = marks[-1].end() + tail_m.start()
             pending_chunks.append(body[cut:])
             body = body[:cut]
-            marks = list(_OPTION_MARKS.finditer(body))
+            marks = _option_marks(body)
         if len(marks) > 4:
             win = None
             for k in range(len(marks) - 3):

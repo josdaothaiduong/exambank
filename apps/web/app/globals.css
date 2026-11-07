@@ -156,6 +156,41 @@ main section { animation: eb-fade-up var(--dur-screen) var(--ease) both; }
 }
 .eb-main > h1, .eb-page-title { font-size: 26px; margin: 2px 0 14px; }
 
+/* ============ Tab Duyệt: lưới phương án chọn đáp án (.eb-opt*) ============ */
+.eb-opt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.eb-opt {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  transition: border-color var(--dur-press) var(--ease),
+              background-color var(--dur-press) var(--ease),
+              transform var(--dur-press) var(--ease);
+}
+.eb-opt:hover { border-color: var(--brand) !important; }
+.eb-opt-label {
+  flex: 0 0 27px;
+  width: 27px; height: 27px;
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 14px;
+  margin-top: 1px;
+}
+@media (max-width: 700px) {
+  .eb-opt-grid { grid-template-columns: 1fr; }
+}
+
 /* Mobile: sidebar thu thành thanh ngang cuộn được */
 @media (max-width: 900px) {
   .eb-shell { grid-template-columns: 1fr; }

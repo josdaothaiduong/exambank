@@ -72,6 +72,7 @@ export default function Home() {
   const [revDiff, setRevDiff] = useState<Record<string, string>>({});
   const [revUnit, setRevUnit] = useState<Record<string, string>>({});
   const [revAnswer, setRevAnswer] = useState<Record<string, string>>({});
+  const [activeQ, setActiveQ] = useState("");
 
   // ---- Trùng lặp kiểu Windows Explorer: trùng >= 40% thì dừng hỏi trước khi nạp ----
   const [conflict, setConflict] = useState<ConflictResult | null>(null);
@@ -128,6 +129,8 @@ export default function Home() {
   }
 
   const [solveMsg, setSolveMsg] = useState("");
+  const [aiSolving, setAiSolving] = useState(false);
+  const aiPollGenRef = useRef(0);
   const [templates, setTemplates] = useState<ExamTemplate[]>([]);
   const [genTplId, setGenTplId] = useState("");
   const [genTitle, setGenTitle] = useState("");
@@ -264,12 +267,40 @@ export default function Home() {
   }
   async function doSolveAI() {
     if (!impExamId) { setError("Hãy chọn đề gốc trước"); return; }
-    setSolveMsg("Đang giải bằng AI...");
+    if (aiSolving) return;
+    setSolveMsg("Đang giao AI giải...");
     try {
       const r = await api<SolveResult>(`/api/v1/source-exams/${impExamId}/solve-ai`, { method: "POST" });
-      setSolveMsg(`AI (${r.model}) đã giải ${r.solved}/${r.total} câu · ${r.low_confidence} câu độ tin cậy thấp cần kiểm tra kỹ · chi phí ước tính $${r.cost_usd.toFixed(4)}.`);
-      loadQueue(impExamId);
-    } catch (err: any) { setError(err.message); setSolveMsg(""); }
+      if (r.mode === "async") {
+        // Chạy nền (Docker, AI_ASYNC=1): endpoint chỉ trả task_id — poll hàng chờ
+        // mỗi 4 giây, đếm câu còn needs_answer cho tới khi về 0 (tối đa 45 lần).
+        setAiSolving(true);
+        setSolveMsg(`Đã giao AI giải ${r.total} câu — đang chạy nền, kết quả sẽ tự xuất hiện bên dưới, đừng tắt trang này.`);
+        const gen = ++aiPollGenRef.current;
+        let remaining = -1;
+        for (let i = 0; i < 45; i++) {
+          await new Promise((res) => setTimeout(res, 4000));
+          if (aiPollGenRef.current !== gen) return; // đã có lượt giao mới / đã huỷ
+          loadQueue(impExamId);
+          try {
+            const fresh = await api<ReviewQueue>(`/api/v1/source-exams/${impExamId}/review-queue`);
+            remaining = fresh.items.filter((it) => it.status === "needs_answer").length;
+          } catch { remaining = -1; }
+          if (remaining === 0) break;
+        }
+        if (aiPollGenRef.current !== gen) return;
+        setAiSolving(false);
+        if (remaining === 0) {
+          setSolveMsg("AI đã giải xong — hãy kiểm tra từng câu rồi duyệt (câu nào AI chưa chắc dưới 70% sẽ bị chặn duyệt mù như quy định).");
+        } else {
+          setSolveMsg("AI vẫn đang chạy nền lâu hơn dự kiến — tải lại trang sau ít phút để xem kết quả.");
+        }
+        loadQueue(impExamId);
+      } else {
+        setSolveMsg(`AI (${r.model}) đã giải ${r.solved ?? 0}/${r.total} câu · ${r.low_confidence ?? 0} câu độ tin cậy thấp cần kiểm tra kỹ · chi phí ước tính $${(r.cost_usd ?? 0).toFixed(4)}.`);
+        loadQueue(impExamId);
+      }
+    } catch (err: any) { setError(err.message); setSolveMsg(""); setAiSolving(false); }
   }
 
   const loadQueue = useCallback((examId: string) => {
@@ -293,6 +324,106 @@ export default function Home() {
 
   const box: React.CSSProperties = { border: "1px solid #E3E8F4", borderRadius: 16, padding: 18, marginBottom: 12, background: "#fff", boxShadow: "0 1px 2px rgb(16 27 60 / .05), 0 10px 24px -14px rgb(16 27 60 / .14)" };
   const btn: React.CSSProperties = { padding: "8px 14px", borderRadius: 12, border: "1px solid #C9D4EE", background: "#fff", cursor: "pointer", fontWeight: 600 };
+
+  // ===== Tab Duyệt: gom nhóm theo đoạn văn, tô sáng chỗ trống đang xem, thẻ câu dạng lưới chọn đáp án =====
+  const blankNoOf = (q: QuestionItem): number | null => {
+    const m = /^Chỗ trống số (\d+)/.exec((q.stem_text || "").trim());
+    if (m) return parseInt(m[1], 10);
+    return q.order_in_source ?? null;
+  };
+
+  const highlightPassage = (src: string, isHtml: boolean, active: number | null, blanks: Set<number>): string => {
+    let s = src;
+    if (!isHtml) s = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return s.replace(/\((\d+)\)/g, (whole, d: string) => {
+      const n = parseInt(d, 10);
+      if (active != null && n === active) return `<span style="background:#F59E0B;color:#451A03;border-radius:6px;padding:0 6px;font-weight:800">(${n})</span>`;
+      if (blanks.has(n)) return `<span style="background:#FEF3C7;border-radius:6px;padding:0 6px;font-weight:650">(${n})</span>`;
+      return whole;
+    });
+  };
+
+  const reviewCard = (q: QuestionItem, inPassage: boolean, isActive: boolean) => {
+    const correctLabel = q.options.find((o) => o.id === q.correct_option_id)?.label;
+    const selectedLabel = revAnswer[q.id] || correctLabel;
+    const blankNo = blankNoOf(q);
+    const isBlankStem = /^Chỗ trống số \d+/.test((q.stem_text || "").trim());
+    const aiLocked = q.answer_source === "ai_solved" && (q.answer_confidence ?? 0) < 0.7 && !revAnswer[q.id];
+    return (
+      <div key={q.id} onClick={() => setActiveQ(q.id)}
+        style={{ ...box, cursor: "pointer", ...(isActive ? { border: "2px solid #F59E0B", boxShadow: "0 2px 4px rgb(16 27 60 / .08), 0 16px 32px -12px rgb(245 158 11 / .45)" } : {}) }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+          <span style={{ background: "#101B3C", color: "#fff", fontWeight: 800, fontSize: 13, padding: "5px 11px", borderRadius: 999 }}>
+            {inPassage && blankNo != null ? `Chỗ trống ${blankNo}` : q.order_in_source != null ? `Câu số ${q.order_in_source} trong đề gốc` : "Câu hỏi"}
+          </span>
+          {q.status === "needs_answer" ? (
+            <span style={{ background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A", fontWeight: 700, fontSize: 12.5, padding: "4px 10px", borderRadius: 999 }}>⏳ Chưa có đáp án</span>
+          ) : q.status === "pending_review" ? (
+            <span style={{ background: "#EAF0FF", color: "#2547D0", border: "1px solid #C7D7FF", fontWeight: 700, fontSize: 12.5, padding: "4px 10px", borderRadius: 999 }}>Chờ duyệt</span>
+          ) : (
+            <span style={{ background: "#F4F6FB", color: "#4A5578", border: "1px solid #E3E8F4", fontWeight: 700, fontSize: 12.5, padding: "4px 10px", borderRadius: 999 }}>{q.status}</span>
+          )}
+        </div>
+        {(!inPassage || !isBlankStem) && (
+          <div style={{ fontWeight: 650 }} dangerouslySetInnerHTML={{ __html: q.stem_html || q.stem_text }} />
+        )}
+        <div className="eb-opt-grid">
+          {q.options.map((o) => {
+            const selected = o.label === selectedLabel;
+            const isDetected = o.label === correctLabel;
+            return (
+              <button key={o.id} type="button" className="eb-opt"
+                onClick={(e) => { e.stopPropagation(); setActiveQ(q.id); setRevAnswer({ ...revAnswer, [q.id]: o.label }); }}
+                style={{ border: selected ? "2px solid #15803D" : "1.5px solid #E3E8F4", background: selected ? "#F0FDF4" : "#fff" }}>
+                <span className="eb-opt-label" style={{ background: selected ? "#15803D" : "#EAF0FF", color: selected ? "#fff" : "#101B3C" }}>{o.label}</span>
+                <span style={{ flex: 1 }}>
+                  <span dangerouslySetInnerHTML={{ __html: o.content_html || o.content_text }} />
+                  {isDetected && <span style={{ display: "inline-block", marginLeft: 8, fontSize: 12, fontWeight: 700, color: "#15803D", background: "#F0FDF4", border: "1px solid #BBF7D0", padding: "1px 7px", borderRadius: 999 }}>✓ hệ thống nhận diện</span>}
+                </span>
+                {selected && <span style={{ color: "#15803D", fontWeight: 900 }}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ color: "#4A5578", fontSize: 13, marginTop: 6 }}>
+          Nguồn đáp án: {q.answer_source}
+          {q.answer_confidence != null ? ` · độ tin cậy ${Math.round(q.answer_confidence * 100)}%` : ""}
+          {q.order_in_source != null ? ` · Câu số ${q.order_in_source} trong đề gốc` : ""}
+        </div>
+        {q.ai_solution && (
+          <div style={{ background: q.ai_solution.confidence >= 0.7 ? "#f5f0ff" : "#fef2f2", border: "1px solid #DDD0FA", borderRadius: 12, padding: 10, marginTop: 8, fontSize: 13 }}>
+            <b>✦ AI giải thích</b> <span style={{ color: "#4A5578" }}>({q.ai_solution.model} · tin cậy {Math.round(q.ai_solution.confidence * 100)}%
+            {q.ai_solution.suggested_difficulty ? ` · gợi ý độ khó ${q.ai_solution.suggested_difficulty}` : ""})</span>
+            <div dangerouslySetInnerHTML={{ __html: q.ai_solution.explanation_html || "" }} />
+            {q.ai_solution.confidence < 0.7 && (
+              <div style={{ color: "#B91C1C", fontWeight: 650 }}>
+                AI chưa chắc chắn — nút Duyệt bị khoá cho đến khi bạn tự chọn đáp án đúng ở lưới phương án phía trên.
+              </div>
+            )}
+          </div>
+        )}
+        {q.status === "needs_answer" && !selectedLabel && (
+          <div style={{ marginTop: 10, fontSize: 13.5, color: "#92400E", background: "#FFFBEB", border: "1px dashed #F59E0B", borderRadius: 10, padding: "8px 12px" }}>
+            💡 Hãy chọn 1 phương án đúng ở trên, hoặc bấm AI giải các câu chưa có đáp án ở đầu trang.
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+          <select value={revDiff[q.id] || ""} onChange={(e) => setRevDiff({ ...revDiff, [q.id]: e.target.value })} style={{ padding: 8 }}>
+            <option value="">— Độ khó —</option><option>NB</option><option>TH</option><option>VD</option><option>VDC</option>
+          </select>
+          <select value={revUnit[q.id] || ""} onChange={(e) => setRevUnit({ ...revUnit, [q.id]: e.target.value })} style={{ padding: 8 }}>
+            <option value="">— Unit —</option>
+            {units.map((u) => (<option key={u.id} value={u.code}>{u.label}</option>))}
+          </select>
+          <span style={{ flex: 1 }} />
+          <button disabled={aiLocked}
+            style={{ padding: "8px 14px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, opacity: aiLocked ? 0.45 : 1 }}
+            onClick={() => doReview(q, "approve")}>Duyệt vào kho</button>
+          <button style={{ padding: "8px 14px", background: "#fff", color: "#B91C1C", border: "1px solid #F0B8B2", borderRadius: 12, fontWeight: 700 }} onClick={() => doReview(q, "reject")}>Loại bỏ</button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="eb-shell">
@@ -478,70 +609,72 @@ export default function Home() {
 
       {tab === "review" && (
         <section>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
-            <span>Đề gốc:</span>
-            <select value={impExamId} onChange={(e) => setImpExamId(e.target.value)} style={{ padding: 9 }}>
-              <option value="">— Chọn đề gốc —</option>
-              {exams.map((e) => (<option key={e.id} value={e.id}>{e.title}</option>))}
-            </select>
-            <span>Đang chờ duyệt: <b>{queue?.total ?? 0}</b> câu</span>
-            <button style={{ padding: "8px 14px", background: "#6d28d9", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }} onClick={doSolveAI}>
-              ✦ AI giải các câu chưa có đáp án
-            </button>
-            {solveMsg && <span style={{ fontSize: 13, color: "#4A5578" }}>{solveMsg}</span>}
-          </div>
-          {queue && queue.total === 0 && <p>Hàng đợi trống — mọi câu của đề này đã được xử lý.</p>}
-          {(queue?.items || []).map((q) => {
-            const correctLabel = q.options.find((o) => o.id === q.correct_option_id)?.label;
+          {(() => {
+            const items = queue?.items || [];
+            const readyCount = items.filter((q) => q.correct_option_id || revAnswer[q.id]).length;
+            const noAnswerCount = items.filter((q) => q.status === "needs_answer" && !q.correct_option_id && !revAnswer[q.id]).length;
+            // Gom nhóm: các câu LIÊN TIẾP có cùng passage_text thành 1 nhóm đoạn văn.
+            type RevGroup = { key: string; passage: QuestionItem | null; items: QuestionItem[] };
+            const groups: RevGroup[] = [];
+            items.forEach((q) => {
+              const p = (q.passage_text || "").trim();
+              const last = groups[groups.length - 1];
+              if (p && last && last.passage && (last.passage.passage_text || "").trim() === p) last.items.push(q);
+              else groups.push({ key: q.id, passage: p ? q : null, items: [q] });
+            });
             return (
-              <div key={q.id} style={box}>
-                {(q.passage_html || q.passage_text) && <div style={{ background: "#EAF0FF", padding: 10, borderRadius: 12, fontSize: 13, marginBottom: 8 }} dangerouslySetInnerHTML={{ __html: q.passage_html || q.passage_text || "" }} />}
-                <div style={{ fontWeight: 650 }} dangerouslySetInnerHTML={{ __html: q.stem_html || q.stem_text }} />
-                <div style={{ display: "grid", gap: 4, fontSize: 14, margin: "8px 0" }}>
-                  {q.options.map((o) => (
-                    <span key={o.id} style={o.label === (revAnswer[q.id] || correctLabel) ? { fontWeight: 700, color: "#15803D" } : {}}>
-                      <span dangerouslySetInnerHTML={{ __html: `${o.label}. ${o.content_html || o.content_text}` }} />{o.label === correctLabel ? " ✓ (hệ thống nhận diện)" : ""}
+              <>
+                <div style={{ ...box, background: "linear-gradient(135deg, #101B3C 0%, #1B37A8 100%)", color: "#fff", border: "0" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 700 }}>Đề gốc:</span>
+                    <select value={impExamId} onChange={(e) => setImpExamId(e.target.value)} style={{ padding: 9 }}>
+                      <option value="">— Chọn đề gốc —</option>
+                      {exams.map((e) => (<option key={e.id} value={e.id}>{e.title}</option>))}
+                    </select>
+                    <span style={{ background: "rgb(255 255 255 / .14)", border: "1px solid rgb(255 255 255 / .25)", padding: "6px 12px", borderRadius: 999, fontSize: 13.5 }}>
+                      Đang chờ duyệt: <b className="numeric">{queue?.total ?? 0}</b> câu
                     </span>
-                  ))}
-                </div>
-                <div style={{ color: "#4A5578", fontSize: 13 }}>
-                  Trạng thái: {q.status} · Nguồn đáp án: {q.answer_source}
-                  {q.answer_confidence != null ? ` · độ tin cậy ${Math.round(q.answer_confidence * 100)}%` : ""}
-                  {q.order_in_source != null ? ` · Câu số ${q.order_in_source} trong đề gốc` : ""}
-                </div>
-                {q.ai_solution && (
-                  <div style={{ background: q.ai_solution.confidence >= 0.7 ? "#f5f0ff" : "#fef2f2", border: "1px solid #DDD0FA", borderRadius: 12, padding: 10, marginTop: 8, fontSize: 13 }}>
-                    <b>✦ AI giải thích</b> <span style={{ color: "#4A5578" }}>({q.ai_solution.model} · tin cậy {Math.round(q.ai_solution.confidence * 100)}%
-                    {q.ai_solution.suggested_difficulty ? ` · gợi ý độ khó ${q.ai_solution.suggested_difficulty}` : ""})</span>
-                    <div dangerouslySetInnerHTML={{ __html: q.ai_solution.explanation_html || "" }} />
-                    {q.ai_solution.confidence < 0.7 && (
-                      <div style={{ color: "#B91C1C", fontWeight: 650 }}>
-                        AI chưa chắc chắn — nút Duyệt bị khoá cho đến khi bạn tự chọn đáp án đúng ở ô bên dưới.
-                      </div>
-                    )}
+                    <span style={{ background: "#F0FDF4", color: "#15803D", padding: "6px 12px", borderRadius: 999, fontSize: 13.5, fontWeight: 650 }}>
+                      ✓ Đã sẵn đáp án: <b className="numeric">{readyCount}</b>
+                    </span>
+                    <span style={{ background: "#FFFBEB", color: "#B45309", padding: "6px 12px", borderRadius: 999, fontSize: 13.5, fontWeight: 650 }}>
+                      ⏳ Chưa có đáp án: <b className="numeric">{noAnswerCount}</b>
+                    </span>
                   </div>
-                )}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                  <select value={revAnswer[q.id] || correctLabel || ""} onChange={(e) => setRevAnswer({ ...revAnswer, [q.id]: e.target.value })} style={{ padding: 8 }}>
-                    <option value="">— Đáp án đúng —</option>
-                    {q.options.map((o) => (<option key={o.id} value={o.label}>{o.label}</option>))}
-                  </select>
-                  <select value={revDiff[q.id] || ""} onChange={(e) => setRevDiff({ ...revDiff, [q.id]: e.target.value })} style={{ padding: 8 }}>
-                    <option value="">— Độ khó —</option><option>NB</option><option>TH</option><option>VD</option><option>VDC</option>
-                  </select>
-                  <select value={revUnit[q.id] || ""} onChange={(e) => setRevUnit({ ...revUnit, [q.id]: e.target.value })} style={{ padding: 8 }}>
-                    <option value="">— Unit —</option>
-                    {units.map((u) => (<option key={u.id} value={u.code}>{u.label}</option>))}
-                  </select>
-                  <button disabled={q.answer_source === "ai_solved" && (q.answer_confidence ?? 0) < 0.7 && !revAnswer[q.id]}
-                    style={{ padding: "8px 14px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700,
-                      opacity: q.answer_source === "ai_solved" && (q.answer_confidence ?? 0) < 0.7 && !revAnswer[q.id] ? 0.45 : 1 }}
-                    onClick={() => doReview(q, "approve")}>Duyệt vào kho</button>
-                  <button style={{ padding: "8px 14px", background: "#fff", color: "#B91C1C", border: "1px solid #F0B8B2", borderRadius: 12, fontWeight: 700 }} onClick={() => doReview(q, "reject")}>Loại bỏ</button>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+                    <button disabled={aiSolving}
+                      style={{ padding: "9px 16px", background: aiSolving ? "#7C6AAE" : "#6d28d9", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, opacity: aiSolving ? 0.75 : 1 }}
+                      onClick={doSolveAI}>
+                      {aiSolving ? "✦ AI đang giải…" : "✦ AI giải các câu chưa có đáp án"}
+                    </button>
+                    {solveMsg && <span style={{ fontSize: 13.5, color: "#DCE4FF" }}>{solveMsg}</span>}
+                  </div>
                 </div>
-              </div>
+                {queue && queue.total === 0 && <p>Hàng đợi trống — mọi câu của đề này đã được xử lý.</p>}
+                {groups.map((g) => {
+                  const activeItem = g.items.find((it) => it.id === activeQ)
+                    || g.items.find((it) => it.status === "needs_answer")
+                    || g.items[0];
+                  const activeBlank = activeItem ? blankNoOf(activeItem) : null;
+                  const blanks = new Set(g.items.map((it) => blankNoOf(it)).filter((n): n is number => n != null));
+                  return (
+                    <div key={g.key}>
+                      {g.passage && (
+                        <div style={{ ...box, marginBottom: 10 }}>
+                          <div style={{ fontSize: 13, color: "#4A5578", fontWeight: 650, marginBottom: 8 }}>
+                            📖 Đoạn văn dùng chung cho {g.items.length} chỗ trống — chỗ trống đang xem được tô đậm, bấm vào thẻ câu để chuyển.
+                          </div>
+                          <div style={{ background: "#F7FAFF", border: "1px solid #E3E8F4", borderRadius: 12, padding: 14, fontSize: 14.5, lineHeight: 1.7 }}
+                            dangerouslySetInnerHTML={{ __html: highlightPassage(g.passage.passage_html || g.passage.passage_text || "", !!g.passage.passage_html, activeBlank, blanks) }} />
+                        </div>
+                      )}
+                      {g.items.map((q) => reviewCard(q, !!g.passage, activeItem?.id === q.id))}
+                    </div>
+                  );
+                })}
+              </>
             );
-          })}
+          })()}
         </section>
       )}
 

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_current_user, get_owned_workspace
 from app.models import Difficulty, Option, QuestionItem, QuestionStatus, QuestionTag, Tag, User
+from app.parsers.option_repair import repair_glued_options
 
 router = APIRouter(prefix="/api/v1/question-items", tags=["question-items"])
 
@@ -84,6 +85,10 @@ def list_question_items(
     total = q.count()
     rows = (q.order_by(QuestionItem.created_at)
             .offset((page - 1) * page_size).limit(page_size).all())
+    for r in rows:
+        # Tự lành option dính của dữ liệu cũ (như màn duyệt) khi GV mở kho.
+        if repair_glued_options(db, r):
+            db.commit()
     return {"items": [_out(r, db) for r in rows], "total": total,
             "page": page, "page_size": page_size}
 

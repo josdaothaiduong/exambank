@@ -25,7 +25,13 @@ def solve_exam_ai(exam_id: uuid.UUID, db: Session = Depends(get_db),
                  .order_by(QuestionItem.order_in_source).all())
     if settings.ai_async:
         from app.worker import ai_solve_batch
-        task = ai_solve_batch.delay([str(q.id) for q in questions])
+        try:
+            task = ai_solve_batch.delay([str(q.id) for q in questions])
+        except Exception:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Không gửi được việc cho AI giải — hàng đợi nền (Redis/worker) chưa sẵn sàng. "
+                "Kiểm tra Docker Desktop rồi thử lại.")
         return {"mode": "async", "task_id": task.id, "total": len(questions),
                 "provider": settings.ai_provider, "model": settings.ai_model or "demo-rule-solver"}
     provider = get_provider(settings)

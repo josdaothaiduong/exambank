@@ -66,7 +66,9 @@ services:
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    # Phải nghe cả 3 queue: task_routes đẩy ai_solve_batch -> "ai", parse_job -> "parse";
+    # thiếu -Q thì task nằm trong Redis không ai xử lý (AI giải treo không lỗi).
+    command: celery -A app.worker.celery_app worker --loglevel=info -Q celery,ai,parse
 
   web:
     build: ./apps/web

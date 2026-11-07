@@ -131,3 +131,44 @@ def test_import_quarantines_duplicate_option_labels(ctx):
     issues = {e["issue"] for e in out["error_log"]}
     assert "duplicate_option_labels" in issues
     assert out["stats"]["failed"] >= 1
+
+
+def test_review_queue_repairs_glued_options(ctx):
+    """Dữ liệu cũ: câu chỉ có 2 option A/C vì nhãn B/D dính vào cuối text của A/C.
+    Mở hàng chờ duyệt phải tự tách thành 4 option đúng nhãn/text, và duyệt với
+    correct_label=B phải thành công (trước khi sửa: 422 'không khớp phương án nào')."""
+    db = ctx["db"]
+    exam = create_source_exam(SourceExamIn(workspace_id=ctx["ws"].id, title="Đề dính nhãn",
+                                           grade=10, exam_kind="quiz"), db=db, user=ctx["ua"])
+    exam_id = uuid.UUID(exam["id"])
+    q = QuestionItem(
+        workspace_id=ctx["ws"].id, source_exam_id=exam_id,
+        question_type="vocabulary_mc", order_in_source=1,
+        stem_html="Choose the correct order of adjectives.",
+        stem_text="Choose the correct order of adjectives.",
+        status=QuestionStatus.needs_answer, dedup_hash="glued-repair-test-1",
+        created_by=ctx["ua"].id)
+    db.add(q); db.flush()
+    db.add_all([
+        Option(question_id=q.id, label="A", position=1,
+               content_text="ideal spacious modernB. modern spacious ideal",
+               content_html="ideal spacious modernB. modern spacious ideal"),
+        Option(question_id=q.id, label="C", position=2,
+               content_text="spacious modern idealD. ideal modern spacious",
+               content_html="spacious modern idealD. ideal modern spacious"),
+    ])
+    db.commit()
+
+    out = review_queue(exam_id, db=db, user=ctx["ua"])
+    assert out["total"] == 1
+    opts = out["items"][0]["options"]
+    assert [o["label"] for o in opts] == ["A", "B", "C", "D"]
+    assert [o["content_text"] for o in opts] == [
+        "ideal spacious modern", "modern spacious ideal",
+        "spacious modern ideal", "ideal modern spacious"]
+
+    res = review_question(q.id, ReviewIn(action="approve", correct_label="B"),
+                          db=db, user=ctx["ua"])
+    assert res["status"] == "approved"
+    correct = [o for o in res["options"] if o["id"] == res["correct_option_id"]]
+    assert correct and correct[0]["label"] == "B"
