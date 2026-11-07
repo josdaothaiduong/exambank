@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
 from app.models import (
-    AISolution, ImportJob, Option, PassageGroup, QuestionItem, QuestionStatus,
+    AISolution, Difficulty, ImportJob, Option, PassageGroup, QuestionItem, QuestionStatus,
     QuestionTag, SourceExam, Tag, User, Workspace,
 )
 from app.routers.ai import solve_exam_ai
@@ -114,16 +114,20 @@ def test_review_queue_exposes_order_in_source(ctx):
     assert orders == [1, 2, 3]
 
 
-class _BadDifficultyProvider:
-    """Provider stub: riêng câu 'museum' trả difficulty không hợp lệ -> lỗi lạ
-    nằm NGOÀI ProviderError (ValueError khi ép kiểu Difficulty)."""
+class _ExplodingProvider:
+    """Provider stub: riêng câu 'museum' trả confidence SAI KIỂU (chuỗi thay vì
+    số) -> TypeError khi pipeline tính độ tin cậy — lỗi lạ nằm NGOÀI
+    ProviderError. (Trước đây test này dùng difficulty="SAI" làm phương tiện,
+    nhưng difficulty nay là trường gợi ý được chuẩn hoá khoan dung — giá trị lạ
+    coi như không đề xuất, xem test_ai_difficulty_* — nên phải đổi phương tiện;
+    mục đích test: cách ly lỗi theo từng câu trong mẻ, không đổi.)"""
     name = "stub"
     model = "stub-1"
 
     def solve(self, system, user, valid_labels):
-        difficulty = "SAI" if "museum" in user else "NB"
-        return {"solution": {"answer_label": "A", "confidence": 0.9,
-                             "explanation_vi": "stub", "difficulty": difficulty,
+        confidence = "cao" if "museum" in user else 0.9
+        return {"solution": {"answer_label": "A", "confidence": confidence,
+                             "explanation_vi": "stub", "difficulty": "NB",
                              "tags": []},
                 "usage": {"input_tokens": 1, "output_tokens": 1}, "raw": {}}
 
@@ -142,7 +146,7 @@ def test_solve_batch_isolates_one_bad_question(ctx):
                          QuestionItem.status == QuestionStatus.needs_answer)
                  .order_by(QuestionItem.order_in_source).all())
     assert len(questions) == 3
-    stats = solve_batch(db, questions, _BadDifficultyProvider())
+    stats = solve_batch(db, questions, _ExplodingProvider())
     assert stats["total"] == 3 and stats["solved"] == 2 and stats["failed"] == 1
     db.expire_all()
     by_stem = {q.stem_text: q for q in db.query(QuestionItem)
@@ -151,3 +155,135 @@ def test_solve_batch_isolates_one_bad_question(ctx):
     assert bad.status == QuestionStatus.needs_answer
     good = [q for s, q in by_stem.items() if "museum" not in s]
     assert all(q.status == QuestionStatus.pending_review for q in good)
+
+
+# ---------------------------------------------------------------------------
+# AI đề xuất độ khó: provider trả difficulty khi giải -> lưu vào ai_solution
+# (cột difficulty + suggested_difficulty) -> review_queue phơi ai_difficulty.
+# AI chỉ ĐỀ XUẤT: không tự áp vào question.difficulty, GV bấm mới dùng.
+# ---------------------------------------------------------------------------
+
+class _FixedDifficultyProvider:
+    """Provider stub cho difficulty cố định, ĐI QUA validate_solution như
+    provider thật (difficulty=None nghĩa là JSON không có trường difficulty)."""
+    name = "stub"
+
+    def __init__(self, difficulty):
+        self.model = "stub-diff"
+        self._difficulty = difficulty
+
+    def solve(self, system, user, valid_labels):
+        from app.ai.provider import validate_solution
+        sol = {"answer_label": "A", "confidence": 0.95,
+               "explanation_vi": "stub", "tags": []}
+        if self._difficulty is not None:
+            sol["difficulty"] = self._difficulty
+        return {"solution": validate_solution(sol, valid_labels),
+                "usage": {"input_tokens": 1, "output_tokens": 1}, "raw": {}}
+
+    def cost_usd(self, usage):
+        return 0.0
+
+
+def _needs_answer_questions(db, exam_id):
+    return (db.query(QuestionItem)
+            .filter(QuestionItem.source_exam_id == exam_id,
+                    QuestionItem.status == QuestionStatus.needs_answer)
+            .order_by(QuestionItem.order_in_source).all())
+
+
+def _solutions_of(db, exam_id):
+    qids = [q.id for q in db.query(QuestionItem)
+            .filter(QuestionItem.source_exam_id == exam_id).all()]
+    return db.query(AISolution).filter(AISolution.question_id.in_(qids)).all()
+
+
+def test_ai_difficulty_valid_is_saved_and_exposed(ctx):
+    """(a) difficulty hợp lệ -> solution lưu đúng cả 2 cột + review_queue
+    có ai_difficulty; question.difficulty vẫn trống (AI không tự áp)."""
+    from app.ai.pipeline import solve_batch
+    db = ctx["db"]
+    exam_id = _fresh_exam(ctx, "Đề AI đề xuất độ khó hợp lệ")
+    stats = solve_batch(db, _needs_answer_questions(db, exam_id),
+                        _FixedDifficultyProvider("VD"))
+    assert stats["solved"] == 3 and stats["failed"] == 0
+    sols = _solutions_of(db, exam_id)
+    assert len(sols) == 3
+    assert all(s.difficulty == "VD" for s in sols)
+    assert all(s.suggested_difficulty == Difficulty.VD for s in sols)
+    queue = review_queue(exam_id, db=db, user=ctx["ua"])
+    assert queue["total"] == 3
+    assert all(i["ai_difficulty"] == "VD" for i in queue["items"])
+    assert all(i["difficulty"] is None for i in queue["items"])
+
+
+def test_ai_difficulty_invalid_means_no_suggestion(ctx):
+    """(b) difficulty lạ -> coi như KHÔNG đề xuất (ai_difficulty null, solution
+    vẫn lưu với difficulty None) và lần giải KHÔNG lỗi — trường gợi ý không
+    được phép huỷ một đáp án tốt. Câu chưa từng qua AI cũng ai_difficulty null."""
+    from app.ai.pipeline import solve_batch
+    db = ctx["db"]
+    exam_id = _fresh_exam(ctx, "Đề AI đề xuất độ khó lạ")
+    queue0 = review_queue(exam_id, db=db, user=ctx["ua"])
+    assert all(i["ai_difficulty"] is None for i in queue0["items"])
+    stats = solve_batch(db, _needs_answer_questions(db, exam_id),
+                        _FixedDifficultyProvider("SAI"))
+    assert stats["solved"] == 3 and stats["failed"] == 0
+    sols = _solutions_of(db, exam_id)
+    assert len(sols) == 3
+    assert all(s.difficulty is None and s.suggested_difficulty is None for s in sols)
+    queue = review_queue(exam_id, db=db, user=ctx["ua"])
+    assert all(i["ai_difficulty"] is None for i in queue["items"])
+
+
+def test_validate_solution_difficulty_is_lenient():
+    """validate_solution: difficulty hợp lệ giữ nguyên; lạ/thiếu -> None,
+    các trường đáp án/confidence vẫn kiểm chặt như cũ."""
+    from app.ai.provider import validate_solution
+    base = {"answer_label": "A", "explanation_vi": "x", "confidence": 0.9, "tags": []}
+    assert validate_solution({**base, "difficulty": "VDC"}, {"A"})["difficulty"] == "VDC"
+    assert validate_solution({**base, "difficulty": "SAI"}, {"A"})["difficulty"] is None
+    assert validate_solution(base, {"A"})["difficulty"] is None
+    assert validate_solution({**base, "difficulty": None}, {"A"})["difficulty"] is None
+
+
+def test_demo_provider_suggests_difficulty_by_rule():
+    """(c) DemoProvider (rule-based) luôn cho đề xuất thuộc 4 mức NB/TH/VD/VDC
+    và đúng quy tắc bề mặt cho các dạng điển hình."""
+    from app.ai.prompts import build_user_prompt
+    from app.ai.provider import DemoProvider
+    p = DemoProvider()
+    labels = {"A", "B", "C", "D"}
+
+    def diff_of(stem, options, qtype="grammar_mc", passage=None):
+        user = build_user_prompt(stem=stem, options=options,
+                                 question_type=qtype, passage_text=passage)
+        return p.solve(system="s", user=user, valid_labels=labels)["solution"]["difficulty"]
+
+    grammar_opts = [{"label": "A", "text": "has lived"}, {"label": "B", "text": "live"},
+                    {"label": "C", "text": "lives"}, {"label": "D", "text": "living"}]
+    # Ngữ pháp cơ bản, quy tắc mạnh (since + năm -> HTHT) -> NB
+    assert diff_of("She ______ here since 2010.", grammar_opts) == "NB"
+    # Sắp xếp câu (phương án dạng chuỗi a-b-c) -> VD
+    arr_opts = [{"label": "A", "text": "b-a-c"}, {"label": "B", "text": "a-b-c"},
+                {"label": "C", "text": "b-c-a"}, {"label": "D", "text": "c-a-b"}]
+    assert diff_of("Mark the correct arrangement of the sentences.", arr_opts,
+                   "sentence_arrangement") == "VD"
+    # Suy luận từ đoạn văn -> VDC
+    assert diff_of("What can be inferred from the passage?", grammar_opts,
+                   "reading_comprehension", passage="Some neutral passage text.") == "VDC"
+    # Cloze trong đoạn, đáp án là cụm dài -> VD; đáp án ngắn -> TH
+    long_opts = [{"label": "A", "text": "the urban population has grown"},
+                 {"label": "B", "text": "growth"}, {"label": "C", "text": "grows"},
+                 {"label": "D", "text": "grown"}]
+    assert diff_of("Since 1950, ______.", long_opts, "cloze",
+                   passage="A passage about cities.") == "VD"
+    assert diff_of("The city is ______ for its parks.", grammar_opts, "cloze",
+                   passage="A passage about a city.") == "TH"
+    # Đồng nghĩa trong ngữ cảnh -> TH; và mọi kết quả đều thuộc 4 mức
+    syn_opts = [{"label": "A", "text": "essential"}, {"label": "B", "text": "late"},
+                {"label": "C", "text": "weak"}, {"label": "D", "text": "rare"}]
+    d_syn = diff_of('The word "crucial" is closest in meaning to ______.', syn_opts, "synonym")
+    assert d_syn == "TH"
+    for d in ("NB", "TH", "VD", "VDC"):
+        assert d in ("NB", "TH", "VD", "VDC")

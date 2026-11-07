@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
 from app.models import (
-    Difficulty, ImportJob, Option, PassageGroup, QuestionItem, QuestionStatus,
+    AISolution, Difficulty, ImportJob, Option, PassageGroup, QuestionItem, QuestionStatus,
     QuestionTag, SourceExam, Tag, User, Workspace,
 )
 from app.parsers.importer import docx_to_html, import_html
@@ -23,7 +23,7 @@ from app.seed import seed_taxonomy
 GOLDEN = pathlib.Path(__file__).parent / "golden_files"
 TABLES = [User.__table__, Workspace.__table__, SourceExam.__table__, PassageGroup.__table__,
           Tag.__table__, QuestionItem.__table__, Option.__table__, QuestionTag.__table__,
-          ImportJob.__table__]
+          ImportJob.__table__, AISolution.__table__]
 
 
 @pytest.fixture(scope="module")

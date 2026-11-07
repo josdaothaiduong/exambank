@@ -193,6 +193,12 @@ class AISolution(Base):
     suggested_tags: Mapped[list] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'), nullable=False, default=list)
     suggested_difficulty: Mapped[Difficulty | None] = mapped_column(
         SAEnum(Difficulty, name="difficulty_level", create_type=False))
+    # Độ khó AI ĐỀ XUẤT dạng chuỗi thuần (NB/TH/VD/VDC, migration 0005) — cột
+    # chuẩn để màn duyệt đọc (ai_difficulty); suggested_difficulty (enum) được
+    # ghi đồng bộ cùng giá trị để tương thích các consumer cũ. None = AI không
+    # đề xuất (provider không trả/trả giá trị lạ). GV bấm "dùng mức này" mới áp
+    # vào question_items.difficulty — AI không tự áp.
+    difficulty: Mapped[str | None] = mapped_column(String(8))
     confidence: Mapped[float] = mapped_column(Numeric(4, 3), nullable=False)
     raw_response: Mapped[dict | None] = mapped_column(JSONB().with_variant(_JSON(), 'sqlite'))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

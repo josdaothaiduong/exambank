@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
 from app.models import (
-    ImportJob, Option, PassageGroup, QuestionItem, QuestionTag, SourceExam, Tag, User, Workspace,
+    AISolution, ImportJob, Option, PassageGroup, QuestionItem, QuestionTag, SourceExam, Tag, User, Workspace,
 )
 from app.parsers.parser import parse_exam_html
 from app.parsers.sanitize import sanitize_html
@@ -59,7 +59,7 @@ def test_bold_only_in_stem_does_not_fabricate_answer():
 
 TABLES = [User.__table__, Workspace.__table__, SourceExam.__table__, PassageGroup.__table__,
           Tag.__table__, QuestionItem.__table__, Option.__table__, QuestionTag.__table__,
-          ImportJob.__table__]
+          ImportJob.__table__, AISolution.__table__]
 
 
 @pytest.fixture(scope="module")

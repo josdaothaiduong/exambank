@@ -87,7 +87,7 @@ export interface QuestionItem {
   id: string; question_type: string; stem_text: string; status: string;
   difficulty: string | null; answer_source: string; answer_confidence: number | null;
   correct_option_id: string | null; stem_html?: string; order_in_source?: number | null;
-  ai_solution?: { model: string; confidence: number; explanation_html: string | null; suggested_difficulty: string | null; suggested_tags: string[] } | null; passage_text?: string | null; passage_html?: string | null; tags: string[];
+  ai_solution?: { model: string; confidence: number; explanation_html: string | null; suggested_difficulty: string | null; suggested_tags: string[] } | null; ai_difficulty?: string | null; passage_text?: string | null; passage_html?: string | null; tags: string[];
   options: { id: string; label: string; content_text: string; content_html?: string }[];
 }
 export interface ImportStats { near_duplicates?: number; total: number; with_answer: number; needs_answer: number; duplicates: number; overwritten: number; failed: number }

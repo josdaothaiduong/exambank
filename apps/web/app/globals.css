@@ -191,6 +191,24 @@ main section { animation: eb-fade-up var(--dur-screen) var(--ease) both; }
   .eb-opt-grid { grid-template-columns: 1fr; }
 }
 
+/* Chip "AI đề xuất độ khó" ở màn duyệt: chỉ hiện khi GV chưa tự chọn độ khó;
+   bấm vào mới đặt mức — AI không tự áp. */
+.eb-ai-diff {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1.5px dashed #7C5CD6;
+  background: #F5F0FF;
+  color: #5B21B6;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color var(--dur-press) var(--ease),
+              border-color var(--dur-press) var(--ease),
+              transform var(--dur-press) var(--ease);
+}
+.eb-ai-diff:hover { background: #EDE9FE; border-color: #5B21B6; }
+.eb-ai-diff:active { transform: scale(.97); }
+
 /* Mobile: sidebar thu thành thanh ngang cuộn được */
 @media (max-width: 900px) {
   .eb-shell { grid-template-columns: 1fr; }

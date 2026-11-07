@@ -11,7 +11,11 @@ Nhiệm vụ: giải câu hỏi trắc nghiệm được cung cấp, chọn MỘ
 Trả lời DUY NHẤT bằng JSON đúng cấu trúc sau, không thêm chữ nào ngoài JSON:
 {"answer_label": "A", "explanation_vi": "giải thích ngắn bằng tiếng Việt vì sao đáp án đúng và các phương án khác sai", "confidence": 0.95, "difficulty": "TH", "tags": ["environment"]}
 Quy tắc: confidence phản ánh trung thực mức chắc chắn (không chắc thì để thấp, tối đa 1.0);
-difficulty thuộc NB/TH/VD/VDC; tags là 0-3 mã chủ đề ngắn (family, environment, technology, education, work, health, culture, travel, science, society)."""
+difficulty là mức độ khó BẠN ĐỀ XUẤT cho câu này (giáo viên sẽ quyết định cuối cùng):
+NB = nhận biết (nhớ quy tắc/từ vựng cơ bản, áp dụng trực tiếp), TH = thông hiểu
+(hiểu ngữ cảnh rồi mới chọn được), VD = vận dụng (kết hợp nhiều tín hiệu, loại trừ
+các phương án nhiễu sát nhau), VDC = vận dụng cao (suy luận nhiều bước, ý hàm ẩn);
+tags là 0-3 mã chủ đề ngắn (family, environment, technology, education, work, health, culture, travel, science, society)."""
 
 _TYPE_HINTS = {
     "grammar_mc": "Đây là câu ngữ pháp: chú ý thì, sự hoà hợp chủ-vị, câu điều kiện, thể bị động, mệnh đề quan hệ, giới từ theo ngữ cảnh.",

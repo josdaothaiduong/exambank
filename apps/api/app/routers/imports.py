@@ -104,17 +104,24 @@ def review_queue(exam_id: uuid.UUID, db: Session = Depends(get_db),
             p = db.get(PassageGroup, r.passage_id)
             out["passage_text"] = p.content_text if p else None
             out["passage_html"] = p.content_html if p else None
-        if r.answer_source == AnswerSource.ai_solved:
-            from app.models import AISolution
-            sol = (db.query(AISolution).filter_by(question_id=r.id)
-                   .order_by(AISolution.created_at.desc()).first())
-            if sol:
-                out["ai_solution"] = {
-                    "model": sol.model, "confidence": float(sol.confidence),
-                    "explanation_html": sol.explanation_html,
-                    "suggested_difficulty": sol.suggested_difficulty.value if sol.suggested_difficulty else None,
-                    "suggested_tags": sol.suggested_tags,
-                }
+        # Đề xuất độ khó của AI: lấy từ ai_solution MỚI NHẤT của câu (bất kể
+        # answer_source hiện tại là gì), null nếu câu chưa từng được AI giải
+        # hoặc AI không đề xuất. Ưu tiên cột difficulty (0005); các bản ghi cũ
+        # chỉ có suggested_difficulty (enum) thì đọc bù từ đó.
+        from app.models import AISolution
+        sol = (db.query(AISolution).filter_by(question_id=r.id)
+               .order_by(AISolution.created_at.desc()).first())
+        out["ai_difficulty"] = None
+        if sol:
+            out["ai_difficulty"] = sol.difficulty or (
+                sol.suggested_difficulty.value if sol.suggested_difficulty else None)
+        if r.answer_source == AnswerSource.ai_solved and sol:
+            out["ai_solution"] = {
+                "model": sol.model, "confidence": float(sol.confidence),
+                "explanation_html": sol.explanation_html,
+                "suggested_difficulty": sol.suggested_difficulty.value if sol.suggested_difficulty else None,
+                "suggested_tags": sol.suggested_tags,
+            }
         items.append(out)
     return {"items": items, "total": len(items)}
 

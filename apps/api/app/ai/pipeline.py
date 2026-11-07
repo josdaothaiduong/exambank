@@ -76,11 +76,17 @@ def solve_question(db: Session, q: QuestionItem, provider: BaseProvider) -> dict
         explanation += (" [Kiểm chứng chéo: lần giải thứ hai (đã xáo trộn phương án) cho đáp án khác"
                         " — độ tin cậy đã bị hạ, giáo viên cần kiểm tra kỹ.]")
 
+    # Đề xuất độ khó: provider thật đã được validate_solution chuẩn hoá
+    # (lạ/thiếu -> None); vẫn guard thêm ở đây để provider stub không qua
+    # validate cũng không làm sập cả câu vì một trường CHỈ mang tính gợi ý.
+    diff_raw = sol.get("difficulty")
+    diff_str = diff_raw if diff_raw in ("NB", "TH", "VD", "VDC") else None
     db.add(AISolution(
         question_id=q.id, model=provider.model, suggested_option_id=suggested.id,
         explanation_html=f"<p>{html_lib.escape(explanation)}</p>",
         suggested_tags=sol["tags"],
-        suggested_difficulty=Difficulty(sol["difficulty"]),
+        difficulty=diff_str,
+        suggested_difficulty=Difficulty(diff_str) if diff_str else None,
         confidence=round(confidence, 3),
         raw_response={"first": first["raw"], "selfcheck": check["raw"],
                       "selfcheck_agree": agree, "usage": usage, "cost_usd": round(cost, 6)},

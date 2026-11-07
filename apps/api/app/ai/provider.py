@@ -24,7 +24,9 @@ PRICE_PER_MTOK = {
     "demo-rule-solver": (0.0, 0.0),
 }
 
-REQUIRED_KEYS = {"answer_label", "explanation_vi", "confidence", "difficulty", "tags"}
+REQUIRED_KEYS = {"answer_label", "explanation_vi", "confidence", "tags"}
+
+DIFFICULTY_LEVELS = ("NB", "TH", "VD", "VDC")
 
 
 class ProviderError(Exception):
@@ -39,11 +41,15 @@ def validate_solution(data: dict, valid_labels: set[str]) -> dict:
     conf = float(data["confidence"])
     if not 0.0 <= conf <= 1.0:
         raise ProviderError("confidence ngoài khoảng 0-1")
-    if data["difficulty"] not in ("NB", "TH", "VD", "VDC"):
-        raise ProviderError(f"difficulty không hợp lệ: {data['difficulty']!r}")
+    # difficulty chỉ là ĐỀ XUẤT cho giáo viên (không phải đáp án): trường này
+    # KHÔNG bắt buộc và giá trị lạ/thiếu -> coi như không có đề xuất (None),
+    # không vì thế mà huỷ cả lần giải. Đáp án + confidence vẫn kiểm chặt.
+    difficulty = data.get("difficulty")
+    if difficulty not in DIFFICULTY_LEVELS:
+        difficulty = None
     return {"answer_label": data["answer_label"],
             "explanation_vi": str(data["explanation_vi"])[:2000],
-            "confidence": conf, "difficulty": data["difficulty"],
+            "confidence": conf, "difficulty": difficulty,
             "tags": [str(t) for t in data["tags"]][:3]}
 
 
@@ -94,10 +100,49 @@ class DemoProvider(BaseProvider):
         stem, options = self._parse_prompt(user)
         label, conf, why = self._decide(stem, options)
         sol = {"answer_label": label, "explanation_vi": why, "confidence": conf,
-               "difficulty": "TH", "tags": []}
+               "difficulty": self._suggest_difficulty(user, stem, options, label, conf),
+               "tags": []}
         return {"solution": validate_solution(sol, valid_labels),
                 "raw": {"provider": "demo", "rule_based": True},
                 "usage": {"input_tokens": len(user.split()), "output_tokens": 24}}
+
+    @staticmethod
+    def _suggest_difficulty(user: str, stem: str, options: list[dict],
+                            chosen_label: str, conf: float) -> str:
+        """Đề xuất độ khó RULE-BASED của DemoProvider (không phải AI thật).
+
+        DemoProvider không có model ngôn ngữ nên suy độ khó bằng quy tắc bề mặt
+        theo dạng câu — chỉ để GV có sẵn một mức gợi ý trên thẻ duyệt, GV bấm
+        mới áp dụng. Thứ tự quy tắc (trên xuống):
+        1. Câu suy luận/ý chính/tựa đề ("can be inferred", "main idea",
+           "best title", "author's purpose"...) -> VDC.
+        2. Câu sắp xếp câu/đoạn (phương án dạng chuỗi "a-b-c", "b-a-c-e"...)
+           -> VD (phải vận dụng mạch liên kết).
+        3. Câu có đoạn văn đi kèm (cloze/đọc hiểu): đáp án là cụm/câu dài
+           (>= 4 từ) -> VD; đáp án ngắn (từ/cụm ngắn) -> TH.
+        4. Câu tìm lỗi sai ("needs correction", "underlined part") -> VD.
+        5. Câu đồng nghĩa/trái nghĩa trong ngữ cảnh -> TH.
+        6. Câu 1 câu đơn mà _decide khớp quy tắc ngữ pháp mạnh (conf >= 0.75)
+           -> NB (nhận biết quy tắc cơ bản: thì, so sánh hơn...).
+        7. Mặc định -> TH.
+        """
+        s = stem.lower()
+        if re.search(r"can be inferred|infer |main idea|best title|author'?s purpose|"
+                     r"implied|purpose of the passage|tone of", s):
+            return "VDC"
+        texts = [o["text"].strip() for o in options]
+        if texts and all(re.fullmatch(r"[a-e](\s*[-–]\s*[a-e])+", t) for t in texts):
+            return "VD"
+        chosen = next((o["text"] for o in options if o["label"] == chosen_label), "")
+        if "ĐOẠN VĂN:" in user:
+            return "VD" if len(chosen.split()) >= 4 else "TH"
+        if "needs correction" in s or "underlined" in s:
+            return "VD"
+        if "closest in meaning" in s or "opposite in meaning" in s:
+            return "TH"
+        if conf >= 0.75:
+            return "NB"
+        return "TH"
 
     @staticmethod
     def _parse_prompt(user: str):

@@ -408,6 +408,13 @@ export default function Home() {
           </div>
         )}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+          {q.ai_difficulty && !revDiff[q.id] && (
+            <button type="button" className="eb-ai-diff"
+              title="AI đề xuất mức độ khó cho câu này — bấm để dùng, vẫn sửa lại được ở ô Độ khó bên cạnh"
+              onClick={() => setRevDiff({ ...revDiff, [q.id]: q.ai_difficulty! })}>
+              ✦ AI đề xuất: {q.ai_difficulty} — dùng mức này
+            </button>
+          )}
           <select value={revDiff[q.id] || ""} onChange={(e) => setRevDiff({ ...revDiff, [q.id]: e.target.value })} style={{ padding: 8 }}>
             <option value="">— Độ khó —</option><option>NB</option><option>TH</option><option>VD</option><option>VDC</option>
           </select>
