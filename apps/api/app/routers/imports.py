@@ -6,11 +6,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.ai.pipeline import CONFIDENCE_GATE
 from app.db import get_db
 from app.deps import get_current_user, get_owned_workspace
 from app.models import (
-    AnswerSource, Difficulty, ImportJob, Option, QuestionItem, QuestionStatus,
-    QuestionTag, SourceExam, Tag, User,
+    AISolution, AnswerSource, Difficulty, ImportJob, Option, QuestionItem,
+    QuestionStatus, QuestionTag, SourceExam, Tag, User,
 )
 from app.parsers.importer import docx_to_html, run_import
 from app.parsers.option_repair import repair_glued_options
@@ -25,6 +26,21 @@ def _owned_exam(db: Session, exam_id: uuid.UUID, user: User) -> SourceExam:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Không tìm thấy đề gốc")
     get_owned_workspace(exam.workspace_id, db, user)
     return exam
+
+
+def _latest_ai_solution(db: Session, question_id: uuid.UUID) -> AISolution | None:
+    """ai_solution MỚI NHẤT của câu (None nếu câu chưa từng được AI giải)."""
+    return (db.query(AISolution).filter_by(question_id=question_id)
+            .order_by(AISolution.created_at.desc()).first())
+
+
+def _solution_difficulty(sol: AISolution | None) -> str | None:
+    """Độ khó AI đề xuất từ 1 ai_solution: ưu tiên cột difficulty (migration
+    0005); bản ghi cũ chỉ có suggested_difficulty (enum) thì đọc bù từ đó."""
+    if sol is None:
+        return None
+    return sol.difficulty or (
+        sol.suggested_difficulty.value if sol.suggested_difficulty else None)
 
 
 class PasteIn(BaseModel):
@@ -106,15 +122,9 @@ def review_queue(exam_id: uuid.UUID, db: Session = Depends(get_db),
             out["passage_html"] = p.content_html if p else None
         # Đề xuất độ khó của AI: lấy từ ai_solution MỚI NHẤT của câu (bất kể
         # answer_source hiện tại là gì), null nếu câu chưa từng được AI giải
-        # hoặc AI không đề xuất. Ưu tiên cột difficulty (0005); các bản ghi cũ
-        # chỉ có suggested_difficulty (enum) thì đọc bù từ đó.
-        from app.models import AISolution
-        sol = (db.query(AISolution).filter_by(question_id=r.id)
-               .order_by(AISolution.created_at.desc()).first())
-        out["ai_difficulty"] = None
-        if sol:
-            out["ai_difficulty"] = sol.difficulty or (
-                sol.suggested_difficulty.value if sol.suggested_difficulty else None)
+        # hoặc AI không đề xuất.
+        sol = _latest_ai_solution(db, r.id)
+        out["ai_difficulty"] = _solution_difficulty(sol)
         if r.answer_source == AnswerSource.ai_solved and sol:
             out["ai_solution"] = {
                 "model": sol.model, "confidence": float(sol.confidence),
@@ -135,6 +145,53 @@ class ReviewIn(BaseModel):
     tag_codes: list[str] | None = None
 
 
+def _apply_approve(db: Session, q: QuestionItem, user: User, *,
+                   correct_label: str | None = None,
+                   question_type: str | None = None,
+                   difficulty: Difficulty | None = None,
+                   explanation_html: str | None = None,
+                   tag_codes: list[str] | None = None) -> None:
+    """Lõi DUYỆT dùng chung cho duyệt đơn (review_question) và duyệt hàng loạt
+    (approve_ready) — MỌI validate nằm ở đây để hai đường không bao giờ lệch
+    nhau; vi phạm thì raise HTTPException như duyệt đơn. Không commit —
+    bên gọi chịu trách nhiệm commit/rollback.
+    """
+    # Cổng EB-303: đáp án do AI đề xuất với confidence < 0.70 không được duyệt "mù" —
+    # giáo viên phải tự tay chọn đáp án (correct_label) thì mới duyệt được.
+    if (q.answer_source == AnswerSource.ai_solved
+            and (q.answer_confidence or 0) < CONFIDENCE_GATE and not correct_label):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "AI chưa chắc chắn về đáp án này (độ tin cậy < 70%). "
+            "Hãy tự chọn đáp án đúng trước khi duyệt.")
+    if correct_label:
+        opt = db.query(Option).filter_by(question_id=q.id, label=correct_label).one_or_none()
+        if opt is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "correct_label không khớp phương án nào")
+        q.correct_option_id = opt.id
+        q.answer_source = AnswerSource.teacher_manual
+        q.answer_confidence = 1.0
+    if not q.correct_option_id:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            "Không thể duyệt câu chưa có đáp án — hãy chọn đáp án trước")
+    if question_type:
+        q.question_type = question_type
+    if difficulty:
+        q.difficulty = difficulty
+    if explanation_html is not None:
+        q.explanation_html = explanation_html
+    if tag_codes is not None:
+        db.query(QuestionTag).filter_by(question_id=q.id).delete()
+        for code in tag_codes:
+            tag = db.query(Tag).filter_by(code=code).one_or_none()
+            if tag:
+                db.add(QuestionTag(question_id=q.id, tag_id=tag.id))
+    q.status = QuestionStatus.approved
+    q.reviewed_by = user.id
+    q.reviewed_at = datetime.now(timezone.utc)
+    db.flush()
+
+
 @router.patch("/api/v1/question-items/{question_id}/review")
 def review_question(question_id: uuid.UUID, body: ReviewIn, db: Session = Depends(get_db),
                     user: User = Depends(get_current_user)):
@@ -148,41 +205,104 @@ def review_question(question_id: uuid.UUID, body: ReviewIn, db: Session = Depend
     if body.action == "reject":
         q.status = QuestionStatus.rejected
     elif body.action in ("approve", "edit_and_approve"):
-        # Cổng EB-303: đáp án do AI đề xuất với confidence < 0.70 không được duyệt "mù" —
-        # giáo viên phải tự tay chọn đáp án (correct_label) thì mới duyệt được.
-        if (q.answer_source == AnswerSource.ai_solved
-                and (q.answer_confidence or 0) < 0.70 and not body.correct_label):
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                "AI chưa chắc chắn về đáp án này (độ tin cậy < 70%). "
-                "Hãy tự chọn đáp án đúng trước khi duyệt.")
-        if body.correct_label:
-            opt = db.query(Option).filter_by(question_id=q.id, label=body.correct_label).one_or_none()
-            if opt is None:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "correct_label không khớp phương án nào")
-            q.correct_option_id = opt.id
-            q.answer_source = AnswerSource.teacher_manual
-            q.answer_confidence = 1.0
-        if not q.correct_option_id:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
-                                "Không thể duyệt câu chưa có đáp án — hãy chọn đáp án trước")
-        if body.question_type:
-            q.question_type = body.question_type
-        if body.difficulty:
-            q.difficulty = body.difficulty
-        if body.explanation_html is not None:
-            q.explanation_html = body.explanation_html
-        if body.tag_codes is not None:
-            db.query(QuestionTag).filter_by(question_id=q.id).delete()
-            for code in body.tag_codes:
-                tag = db.query(Tag).filter_by(code=code).one_or_none()
-                if tag:
-                    db.add(QuestionTag(question_id=q.id, tag_id=tag.id))
-        q.status = QuestionStatus.approved
-        q.reviewed_by = user.id
-        q.reviewed_at = datetime.now(timezone.utc)
+        _apply_approve(db, q, user, correct_label=body.correct_label,
+                       question_type=body.question_type, difficulty=body.difficulty,
+                       explanation_html=body.explanation_html, tag_codes=body.tag_codes)
     else:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "action không hợp lệ")
     db.commit()
     db.refresh(q)
     return question_out(q, db)
+
+
+# Nguồn đáp án "đáng tin cậy" cho duyệt hàng loạt: đáp án do hệ thống NHẬN DIỆN
+# từ định dạng đề (tô đỏ/highlight/in đậm-gạch chân/dấu sao/bảng đáp án) hoặc do
+# chính giáo viên chọn tay. Đáp án AI (ai_solved) KHÔNG nằm ở đây — nó chỉ được
+# duyệt hàng loạt khi ai_solution mới nhất đạt cổng tin cậy 0.70 (xem dưới).
+TRUSTED_ANSWER_SOURCES = frozenset({
+    AnswerSource.red_text, AnswerSource.highlight, AnswerSource.bold_underline,
+    AnswerSource.marker_star, AnswerSource.answer_key_table,
+    AnswerSource.teacher_manual,
+})
+
+
+def _bulk_skip_reason(db: Session, q: QuestionItem) -> str | None:
+    """None = câu đủ điều kiện duyệt hàng loạt; ngược lại trả lý do bỏ qua
+    (tiếng Việt ngắn). Tiêu chí KHỚP cổng duyệt đơn: có đáp án đã đặt VÀ
+    (nguồn nhận diện/giáo viên, HOẶC AI với confidence mới nhất >= 0.70).
+    Câu AI confidence thấp KHÔNG có đường nào lọt qua được.
+    """
+    if not q.correct_option_id:
+        return "Chưa có đáp án"
+    if q.answer_source == AnswerSource.ai_solved:
+        sol = _latest_ai_solution(db, q.id)
+        conf = (float(sol.confidence) if sol is not None and sol.confidence is not None
+                else (q.answer_confidence or 0))
+        if conf < CONFIDENCE_GATE:
+            return (f"AI chưa chắc chắn (độ tin cậy {round(conf * 100)}% < 70%)"
+                    " — hãy tự chọn đáp án rồi duyệt từng câu")
+        return None
+    if q.answer_source in TRUSTED_ANSWER_SOURCES:
+        return None
+    return "Chưa rõ nguồn đáp án — cần duyệt từng câu"
+
+
+class ApproveReadyIn(BaseModel):
+    unit_tag_id: str | None = None
+    use_ai_difficulty: bool = False
+
+
+@router.post("/api/v1/source-exams/{exam_id}/approve-ready")
+def approve_ready(exam_id: uuid.UUID, body: ApproveReadyIn, db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    """Duyệt HÀNG LOẠT các câu ĐỦ TIN CẬY trong hàng chờ của đề.
+
+    Server tự tính tập câu đủ điều kiện (client không gửi danh sách id):
+    câu có đáp án đã đặt và nguồn thuộc nhóm nhận diện/giáo viên, hoặc đáp án
+    AI với confidence của ai_solution mới nhất >= 0.70. Từng câu được duyệt
+    bằng đúng lõi _apply_approve của duyệt đơn — không nới lỏng validate nào.
+    Câu không đủ điều kiện bị bỏ qua kèm lý do, không chặn cả mẻ.
+    """
+    exam = _owned_exam(db, exam_id, user)
+    unit_tag: Tag | None = None
+    if body.unit_tag_id:
+        try:
+            unit_tag_id = uuid.UUID(body.unit_tag_id)
+        except (ValueError, AttributeError, TypeError):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "unit_tag_id không hợp lệ")
+        unit_tag = db.get(Tag, unit_tag_id)
+        if unit_tag is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "Không tìm thấy Unit đã chọn")
+    rows = (db.query(QuestionItem).filter(
+        QuestionItem.source_exam_id == exam.id,
+        QuestionItem.status.in_([QuestionStatus.pending_review, QuestionStatus.needs_answer]))
+        .order_by(QuestionItem.order_in_source).all())
+    approved_ids: list[str] = []
+    skipped: list[dict] = []
+    for q in rows:
+        reason = _bulk_skip_reason(db, q)
+        if reason is not None:
+            skipped.append({"question_id": str(q.id), "reason": reason})
+            continue
+        difficulty: Difficulty | None = None
+        if body.use_ai_difficulty:
+            diff_str = _solution_difficulty(_latest_ai_solution(db, q.id))
+            if diff_str:
+                try:
+                    difficulty = Difficulty(diff_str)
+                except ValueError:
+                    difficulty = None
+        try:
+            # SAVEPOINT từng câu: 1 câu lỗi chỉ bị bỏ qua, không cuốn cả mẻ.
+            with db.begin_nested():
+                _apply_approve(db, q, user, difficulty=difficulty,
+                               tag_codes=[unit_tag.code] if unit_tag else None)
+        except HTTPException as e:
+            skipped.append({"question_id": str(q.id), "reason": str(e.detail)})
+            continue
+        approved_ids.append(str(q.id))
+    db.commit()
+    return {"approved_count": len(approved_ids), "approved_ids": approved_ids,
+            "skipped": skipped}

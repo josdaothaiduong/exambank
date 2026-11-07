@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, clearToken, downloadExamPackage, getToken, ConflictResult, ExamTemplate, GeneratedExam, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SolveResult, SourceExam, Tag, Workspace } from "../lib/api";
+import { api, clearToken, downloadExamPackage, getToken, BulkApproveResult, ConflictResult, ExamTemplate, GeneratedExam, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SolveResult, SourceExam, Tag, Workspace } from "../lib/api";
 
 // ===== Ô chọn đề gốc dạng combobox (thay <select> thuần) =====
 // Khi có nhiều đề / nhiều nhánh (lớp, loại đề, năm học), <select> thuần rất khó chọn:
@@ -235,6 +235,12 @@ export default function Home() {
   const [solveInfo, setSolveInfo] = useState("");
   const [aiSolving, setAiSolving] = useState(false);
   const aiPollGenRef = useRef(0);
+  // Duyệt hàng loạt các câu đủ tin cậy (panel xác nhận nội tuyến ở tab Duyệt)
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkUnitId, setBulkUnitId] = useState("");
+  const [bulkUseAiDiff, setBulkUseAiDiff] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkSummary, setBulkSummary] = useState<{ approved: number; skipped: { question_id: string; reason: string }[] } | null>(null);
   const [templates, setTemplates] = useState<ExamTemplate[]>([]);
   const [genTplId, setGenTplId] = useState("");
   const [genTitle, setGenTitle] = useState("");
@@ -369,18 +375,36 @@ export default function Home() {
     const w = window.open("", "_blank");
     if (w) { w.document.write(htmlText); w.document.close(); }
   }
-  async function doSolveAI() {
+  // Chữ ký "đã giải" của 1 câu AI trong hàng chờ — dùng để nhận biết lượt
+  // giải LẠI đã cập nhật câu đó chưa khi poll đường async.
+  const aiSig = (it: QuestionItem) => (it.ai_solution
+    ? `${it.ai_solution.confidence}|${it.ai_solution.explanation_html || ""}` : "");
+
+  async function doSolveAI(kind: "solve" | "resolve" = "solve") {
     if (!impExamId) { setError("Hãy chọn đề gốc trước"); return; }
     if (aiSolving) return;
     setSolveInfo("");
-    setSolveMsg("Đang giao AI giải...");
+    setBulkSummary(null);
+    setSolveMsg(kind === "resolve" ? "Đang giao AI giải lại..." : "Đang giao AI giải...");
+    // Giải lại: chụp chữ ký ai_solution hiện tại của các câu AI — poll async sẽ
+    // đếm số câu CHƯA đổi chữ ký để biết khi nào lượt giải mới đã chạm tới.
+    const sigBefore = new Map<string, string>();
+    if (kind === "resolve") {
+      try {
+        const fresh = await api<ReviewQueue>(`/api/v1/source-exams/${impExamId}/review-queue`);
+        fresh.items.filter((it) => it.answer_source === "ai_solved")
+          .forEach((it) => sigBefore.set(it.id, aiSig(it)));
+      } catch { /* không chụp được thì poll theo thời gian tối đa như cũ */ }
+    }
     try {
-      const r = await api<SolveResult>(`/api/v1/source-exams/${impExamId}/solve-ai`, { method: "POST" });
+      const r = await api<SolveResult>(`/api/v1/source-exams/${impExamId}/${kind === "resolve" ? "resolve-ai" : "solve-ai"}`, { method: "POST" });
       if (r.mode === "async") {
         // Chạy nền (Docker, AI_ASYNC=1): endpoint chỉ trả task_id — poll hàng chờ
-        // mỗi 4 giây, đếm câu còn needs_answer cho tới khi về 0 (tối đa 45 lần).
+        // mỗi 4 giây cho tới khi không còn câu nào đang chờ lượt giải này
+        // (tối đa 45 lần). "solve": câu needs_answer về 0; "resolve": mọi câu
+        // AI trong ảnh chụp ban đầu đều đã đổi chữ ký ai_solution.
         setAiSolving(true);
-        setSolveMsg(`Đã giao AI giải ${r.total} câu — đang chạy nền, kết quả sẽ tự xuất hiện bên dưới, đừng tắt trang này.`);
+        setSolveMsg(`Đã giao AI ${kind === "resolve" ? "giải lại" : "giải"} ${r.total} câu — đang chạy nền, kết quả sẽ tự xuất hiện bên dưới, đừng tắt trang này.`);
         const gen = ++aiPollGenRef.current;
         let remaining = -1;
         for (let i = 0; i < 45; i++) {
@@ -389,14 +413,18 @@ export default function Home() {
           loadQueue(impExamId);
           try {
             const fresh = await api<ReviewQueue>(`/api/v1/source-exams/${impExamId}/review-queue`);
-            remaining = fresh.items.filter((it) => it.status === "needs_answer").length;
+            remaining = kind === "resolve"
+              ? fresh.items.filter((it) => sigBefore.has(it.id) && aiSig(it) === sigBefore.get(it.id)).length
+              : fresh.items.filter((it) => it.status === "needs_answer").length;
           } catch { remaining = -1; }
           if (remaining === 0) break;
         }
         if (aiPollGenRef.current !== gen) return;
         setAiSolving(false);
         if (remaining === 0) {
-          setSolveMsg("AI đã giải xong — hãy kiểm tra từng câu rồi duyệt (câu nào AI chưa chắc dưới 70% sẽ bị chặn duyệt mù như quy định).");
+          setSolveMsg(kind === "resolve"
+            ? "AI đã giải lại xong — đáp án, độ tin cậy và gợi ý độ khó đã cập nhật theo lượt giải mới, hãy kiểm tra rồi duyệt."
+            : "AI đã giải xong — hãy kiểm tra từng câu rồi duyệt (câu nào AI chưa chắc dưới 70% sẽ bị chặn duyệt mù như quy định).");
         } else {
           setSolveMsg("AI vẫn đang chạy nền lâu hơn dự kiến — tải lại trang sau ít phút để xem kết quả.");
         }
@@ -405,10 +433,44 @@ export default function Home() {
         // Backend báo fallback=true: hàng đợi nền chưa sẵn sàng nên đã giải trực tiếp
         // ngay trong request — đây là thông tin (info), không phải lỗi.
         if (r.fallback) setSolveInfo("Đã giải trực tiếp vì hàng đợi nền chưa sẵn sàng.");
-        setSolveMsg(`AI (${r.model}) đã giải ${r.solved ?? 0}/${r.total} câu · ${r.low_confidence ?? 0} câu độ tin cậy thấp cần kiểm tra kỹ · chi phí ước tính $${(r.cost_usd ?? 0).toFixed(4)}.`);
+        setSolveMsg(`AI (${r.model}) đã ${kind === "resolve" ? "giải lại" : "giải"} ${r.solved ?? 0}/${r.total} câu · ${r.low_confidence ?? 0} câu độ tin cậy thấp cần kiểm tra kỹ · chi phí ước tính $${(r.cost_usd ?? 0).toFixed(4)}.`);
         loadQueue(impExamId);
       }
     } catch (err: any) { setError(err.message); setSolveMsg(""); setAiSolving(false); }
+  }
+
+  function doResolveAI() {
+    if (aiSolving) return;
+    const ok = window.confirm(
+      "AI sẽ GIẢI LẠI các câu do AI đã giải (chưa duyệt): đáp án AI cũ sẽ bị thay bằng kết quả giải mới.\n\n" +
+      "Đáp án từ tô đỏ / highlight / bảng đáp án, câu bạn đã tự chọn đáp án và câu đã duyệt KHÔNG bị ảnh hưởng.\n\nTiếp tục?");
+    if (ok) doSolveAI("resolve");
+  }
+
+  // Tiêu chí "đủ tin cậy" để duyệt hàng loạt — KHỚP ĐÚNG tiêu chí server
+  // (approve-ready): có đáp án đã đặt VÀ (nguồn nhận diện/giáo viên tự chọn,
+  // HOẶC đáp án AI với độ tin cậy >= 70%). Chỉ để hiển thị số N trên nút;
+  // server tự tính lại, client không gửi danh sách câu.
+  const TRUSTED_SOURCES = ["red_text", "highlight", "bold_underline", "marker_star", "answer_key_table", "teacher_manual"];
+  const bulkEligible = (q: QuestionItem): boolean => {
+    if (!q.correct_option_id) return false;
+    if (q.answer_source === "ai_solved") return (q.ai_solution?.confidence ?? q.answer_confidence ?? 0) >= 0.7;
+    return TRUSTED_SOURCES.includes(q.answer_source);
+  };
+
+  async function doBulkApprove() {
+    if (!impExamId || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const r = await api<BulkApproveResult>(`/api/v1/source-exams/${impExamId}/approve-ready`, {
+        method: "POST",
+        body: JSON.stringify({ unit_tag_id: bulkUnitId || null, use_ai_difficulty: bulkUseAiDiff }),
+      });
+      setBulkSummary({ approved: r.approved_count, skipped: r.skipped });
+      setBulkOpen(false);
+      loadQueue(impExamId);
+    } catch (err: any) { setError(err.message); }
+    finally { setBulkBusy(false); }
   }
 
   const loadQueue = useCallback((examId: string) => {
@@ -725,6 +787,8 @@ export default function Home() {
             const items = queue?.items || [];
             const readyCount = items.filter((q) => q.correct_option_id || revAnswer[q.id]).length;
             const noAnswerCount = items.filter((q) => q.status === "needs_answer" && !q.correct_option_id && !revAnswer[q.id]).length;
+            const aiSolvedCount = items.filter((q) => q.answer_source === "ai_solved").length;
+            const bulkCount = items.filter(bulkEligible).length;
             // Gom nhóm: các câu LIÊN TIẾP có cùng passage_text thành 1 nhóm đoạn văn.
             type RevGroup = { key: string; passage: QuestionItem | null; items: QuestionItem[] };
             const groups: RevGroup[] = [];
@@ -753,14 +817,77 @@ export default function Home() {
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
                     <button disabled={aiSolving}
                       style={{ padding: "9px 16px", background: aiSolving ? "#7C6AAE" : "#6d28d9", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, opacity: aiSolving ? 0.75 : 1 }}
-                      onClick={doSolveAI}>
+                      onClick={() => doSolveAI("solve")}>
                       {aiSolving ? "✦ AI đang giải…" : "✦ AI giải các câu chưa có đáp án"}
                     </button>
+                    {aiSolvedCount > 0 && (
+                      <button disabled={aiSolving}
+                        title="Giải lại các câu do AI đã giải nhưng chưa duyệt — dùng khi đã cắm key AI thật để thay kết quả của bộ giải demo"
+                        style={{ padding: "9px 16px", background: "rgb(255 255 255 / .12)", color: "#fff", border: "1px solid rgb(255 255 255 / .45)", borderRadius: 12, fontWeight: 700, opacity: aiSolving ? 0.6 : 1 }}
+                        onClick={doResolveAI}>
+                        ↻ AI giải lại các câu AI đã giải ({aiSolvedCount})
+                      </button>
+                    )}
+                    {bulkCount > 0 && (
+                      <button disabled={bulkBusy}
+                        title="Duyệt một lượt các câu có đáp án đáng tin cậy — câu AI dưới 70% tin cậy luôn bị bỏ qua"
+                        style={{ padding: "9px 16px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, opacity: bulkBusy ? 0.7 : 1 }}
+                        onClick={() => { setBulkSummary(null); setBulkOpen((o) => !o); }}>
+                        ✓ Duyệt hàng loạt câu đủ tin cậy ({bulkCount})
+                      </button>
+                    )}
                     {solveMsg && <span style={{ fontSize: 13.5, color: "#DCE4FF" }}>{solveMsg}</span>}
                   </div>
                   {solveInfo && (
                     <div style={{ marginTop: 10, background: "#DBEAFE", color: "#1E3A8A", border: "1px solid #93C5FD", borderRadius: 10, padding: "8px 12px", fontSize: 13.5, fontWeight: 600 }}>
                       ℹ️ {solveInfo}
+                    </div>
+                  )}
+                  {bulkOpen && (
+                    <div style={{ marginTop: 12, background: "#fff", color: "#101B3C", borderRadius: 12, padding: 14 }}>
+                      <div style={{ fontWeight: 750, marginBottom: 4 }}>Duyệt hàng loạt {bulkCount} câu đủ tin cậy</div>
+                      <div style={{ fontSize: 13, color: "#4A5578", marginBottom: 10 }}>
+                        Chỉ duyệt câu có đáp án từ tô đỏ / highlight / bảng đáp án / bạn tự chọn, hoặc đáp án AI có
+                        độ tin cậy từ 70% trở lên. Câu AI chưa chắc chắn (dưới 70%) sẽ bị bỏ qua — không có ngoại lệ,
+                        bạn vẫn phải tự chọn đáp án và duyệt từng câu như trước.
+                      </div>
+                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                        <label style={{ fontSize: 13.5, fontWeight: 600 }}>
+                          Unit chung:
+                          <select value={bulkUnitId} onChange={(e) => setBulkUnitId(e.target.value)} style={{ padding: 8, marginLeft: 6 }}>
+                            <option value="">— Không gán —</option>
+                            {units.map((u) => (<option key={u.id} value={u.id}>{u.label}</option>))}
+                          </select>
+                        </label>
+                        <label style={{ fontSize: 13.5, display: "flex", gap: 6, alignItems: "center" }} title="Câu nào có gợi ý độ khó của AI thì gán mức đó; câu không có gợi ý vẫn để trống">
+                          <input type="checkbox" checked={bulkUseAiDiff} onChange={(e) => setBulkUseAiDiff(e.target.checked)} />
+                          Dùng độ khó AI đề xuất cho các câu
+                        </label>
+                        <span style={{ flex: 1 }} />
+                        <button disabled={bulkBusy}
+                          style={{ padding: "8px 14px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, opacity: bulkBusy ? 0.7 : 1 }}
+                          onClick={doBulkApprove}>
+                          {bulkBusy ? "Đang duyệt…" : `Duyệt ${bulkCount} câu`}
+                        </button>
+                        <button disabled={bulkBusy} style={btn} onClick={() => setBulkOpen(false)}>Huỷ</button>
+                      </div>
+                    </div>
+                  )}
+                  {bulkSummary && (
+                    <div style={{ marginTop: 10, background: "#F0FDF4", color: "#14532D", border: "1px solid #86C79B", borderRadius: 10, padding: "10px 14px", fontSize: 13.5 }}>
+                      <b>Đã duyệt {bulkSummary.approved} câu vào kho.</b>
+                      {bulkSummary.skipped.length > 0 && (
+                        <>
+                          <span> Bỏ qua {bulkSummary.skipped.length} câu:</span>
+                          <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                            {Object.entries(bulkSummary.skipped.reduce<Record<string, number>>((acc, s) => {
+                              acc[s.reason] = (acc[s.reason] || 0) + 1; return acc;
+                            }, {})).map(([reason, n]) => (
+                              <li key={reason}>{n} câu — {reason}</li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

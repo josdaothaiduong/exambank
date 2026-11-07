@@ -9,28 +9,21 @@ from app.ai.provider import get_provider
 from app.config import settings
 from app.db import get_db
 from app.deps import get_current_user, get_owned_workspace
-from app.models import QuestionItem, QuestionStatus, SourceExam, User
+from app.models import AnswerSource, QuestionItem, QuestionStatus, SourceExam, User
 from app.routers.imports import _owned_exam
 
 router = APIRouter(tags=["ai"])
 log = logging.getLogger(__name__)
 
 
-@router.post("/api/v1/source-exams/{exam_id}/solve-ai")
-def solve_exam_ai(exam_id: uuid.UUID, db: Session = Depends(get_db),
-                  user: User = Depends(get_current_user)):
-    """Giải mọi câu needs_answer của đề bằng AI (đồng bộ ở dev; Celery khi AI_ASYNC=1).
+def _dispatch_solve(db: Session, questions: list[QuestionItem]) -> dict:
+    """Gửi một mẻ câu cho pipeline AI giải — dùng chung cho solve-ai và resolve-ai.
 
-    Lớp dự phòng cho bản dùng cá nhân trên 1 máy: nếu gửi việc vào hàng đợi
-    nền thất bại (Redis/worker chưa sẵn sàng) thì giải ĐỒNG BỘ ngay trong
-    request và báo rõ qua cờ fallback — chỉ khi đường đồng bộ cũng lỗi
-    mới trả 503 như cũ.
+    Đồng bộ ở dev; Celery khi AI_ASYNC=1. Lớp dự phòng cho bản dùng cá nhân
+    trên 1 máy: nếu gửi việc vào hàng đợi nền thất bại (Redis/worker chưa
+    sẵn sàng) thì giải ĐỒNG BỘ ngay trong request và báo rõ qua cờ
+    fallback — chỉ khi đường đồng bộ cũng lỗi mới trả 503 như cũ.
     """
-    exam = _owned_exam(db, exam_id, user)
-    questions = (db.query(QuestionItem)
-                 .filter(QuestionItem.source_exam_id == exam.id,
-                         QuestionItem.status == QuestionStatus.needs_answer)
-                 .order_by(QuestionItem.order_in_source).all())
     fallback = False
     if settings.ai_async:
         from app.worker import ai_solve_batch
@@ -61,6 +54,37 @@ def solve_exam_ai(exam_id: uuid.UUID, db: Session = Depends(get_db),
         out["note"] = ("Hàng đợi nền chưa sẵn sàng nên hệ thống đã giải trực tiếp "
                        "ngay trong lần bấm này (kết quả vẫn đầy đủ).")
     return out
+
+
+@router.post("/api/v1/source-exams/{exam_id}/solve-ai")
+def solve_exam_ai(exam_id: uuid.UUID, db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    """Giải mọi câu needs_answer của đề bằng AI (đồng bộ ở dev; Celery khi AI_ASYNC=1)."""
+    exam = _owned_exam(db, exam_id, user)
+    questions = (db.query(QuestionItem)
+                 .filter(QuestionItem.source_exam_id == exam.id,
+                         QuestionItem.status == QuestionStatus.needs_answer)
+                 .order_by(QuestionItem.order_in_source).all())
+    return _dispatch_solve(db, questions)
+
+
+@router.post("/api/v1/source-exams/{exam_id}/resolve-ai")
+def resolve_exam_ai(exam_id: uuid.UUID, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    """Giải LẠI các câu do AI đã giải nhưng chưa duyệt (vd sau khi cắm key AI thật
+    để thay kết quả của bộ giải demo). Pipeline ghi ai_solution MỚI và cập nhật
+    đáp án/gợi ý của câu theo kết quả mới nhất; câu đã duyệt và câu có đáp án
+    từ tô đỏ/highlight/bảng đáp án/giáo viên tự chọn KHÔNG bao giờ bị đụng.
+    Cùng cơ chế async + fallback như solve-ai (xem _dispatch_solve).
+    """
+    exam = _owned_exam(db, exam_id, user)
+    questions = (db.query(QuestionItem)
+                 .filter(QuestionItem.source_exam_id == exam.id,
+                         QuestionItem.answer_source == AnswerSource.ai_solved,
+                         QuestionItem.status.in_([QuestionStatus.needs_answer,
+                                                  QuestionStatus.pending_review]))
+                 .order_by(QuestionItem.order_in_source).all())
+    return _dispatch_solve(db, questions)
 
 
 @router.post("/api/v1/question-items/{question_id}/solve-ai")

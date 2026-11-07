@@ -26,6 +26,11 @@ def solve_question(db: Session, q: QuestionItem, provider: BaseProvider) -> dict
     options = _options_of(db, q)
     if len(options) < 2:
         return {"question_id": str(q.id), "status": "failed", "error": "Câu thiếu phương án"}
+    # Re-solve (giải lại câu AI đã giải): câu đã có đáp án AI + ai_solution cũ.
+    # Nếu lần giải lại thất bại, giữ nguyên đáp án cũ và đưa câu về pending_review
+    # (vẫn đang chờ duyệt với đáp án cũ) thay vì needs_answer như câu chưa từng giải.
+    had_ai_answer = (q.answer_source == AnswerSource.ai_solved
+                     and q.correct_option_id is not None)
     passage_text = None
     if q.passage_id:
         p = db.get(PassageGroup, q.passage_id)
@@ -55,7 +60,8 @@ def solve_question(db: Session, q: QuestionItem, provider: BaseProvider) -> dict
                                         question_type=q.question_type, passage_text=passage_text),
             valid_labels=valid_labels)
     except ProviderError as e:
-        q.status = QuestionStatus.needs_answer
+        q.status = (QuestionStatus.pending_review if had_ai_answer
+                    else QuestionStatus.needs_answer)
         db.flush()
         return {"question_id": str(q.id), "status": "failed", "error": str(e)}
 
