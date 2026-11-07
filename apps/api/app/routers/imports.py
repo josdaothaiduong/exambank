@@ -150,16 +150,25 @@ def _apply_approve(db: Session, q: QuestionItem, user: User, *,
                    question_type: str | None = None,
                    difficulty: Difficulty | None = None,
                    explanation_html: str | None = None,
-                   tag_codes: list[str] | None = None) -> None:
+                   tag_codes: list[str] | None = None,
+                   allow_low_confidence_ai: bool = False) -> None:
     """Lõi DUYỆT dùng chung cho duyệt đơn (review_question) và duyệt hàng loạt
     (approve_ready) — MỌI validate nằm ở đây để hai đường không bao giờ lệch
     nhau; vi phạm thì raise HTTPException như duyệt đơn. Không commit —
     bên gọi chịu trách nhiệm commit/rollback.
+
+    `allow_low_confidence_ai`: NGOẠI LỆ duy nhất của cổng 0.70 — CHỈ
+    approve_ready mới được truyền True, và chỉ khi giáo viên chủ động bật
+    tuỳ chọn "chấp nhận đáp án AI tin cậy thấp" trong panel duyệt hàng loạt
+    (yêu cầu của GV, 2026-11-07). Đường duyệt ĐƠN không bao giờ truyền
+    tham số này nên cổng vẫn khoá cứng như cũ. Khi duyệt qua ngoại lệ,
+    answer_source/confidence của câu giữ nguyên (dấu vết kiểm toán không đổi).
     """
     # Cổng EB-303: đáp án do AI đề xuất với confidence < 0.70 không được duyệt "mù" —
     # giáo viên phải tự tay chọn đáp án (correct_label) thì mới duyệt được.
     if (q.answer_source == AnswerSource.ai_solved
-            and (q.answer_confidence or 0) < CONFIDENCE_GATE and not correct_label):
+            and (q.answer_confidence or 0) < CONFIDENCE_GATE and not correct_label
+            and not allow_low_confidence_ai):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "AI chưa chắc chắn về đáp án này (độ tin cậy < 70%). "
@@ -226,11 +235,13 @@ TRUSTED_ANSWER_SOURCES = frozenset({
 })
 
 
-def _bulk_skip_reason(db: Session, q: QuestionItem) -> str | None:
+def _bulk_skip_reason(db: Session, q: QuestionItem, *,
+                      accept_low_confidence_ai: bool = False) -> str | None:
     """None = câu đủ điều kiện duyệt hàng loạt; ngược lại trả lý do bỏ qua
     (tiếng Việt ngắn). Tiêu chí KHỚP cổng duyệt đơn: có đáp án đã đặt VÀ
     (nguồn nhận diện/giáo viên, HOẶC AI với confidence mới nhất >= 0.70).
-    Câu AI confidence thấp KHÔNG có đường nào lọt qua được.
+    Câu AI confidence thấp chỉ lọt khi giáo viên chủ động bật
+    `accept_low_confidence_ai` trong panel (mặc định tắt).
     """
     if not q.correct_option_id:
         return "Chưa có đáp án"
@@ -239,6 +250,8 @@ def _bulk_skip_reason(db: Session, q: QuestionItem) -> str | None:
         conf = (float(sol.confidence) if sol is not None and sol.confidence is not None
                 else (q.answer_confidence or 0))
         if conf < CONFIDENCE_GATE:
+            if accept_low_confidence_ai:
+                return None
             return (f"AI chưa chắc chắn (độ tin cậy {round(conf * 100)}% < 70%)"
                     " — hãy tự chọn đáp án rồi duyệt từng câu")
         return None
@@ -250,6 +263,10 @@ def _bulk_skip_reason(db: Session, q: QuestionItem) -> str | None:
 class ApproveReadyIn(BaseModel):
     unit_tag_id: str | None = None
     use_ai_difficulty: bool = False
+    # Mặc định False: câu AI tin cậy < 70% bị bỏ qua. Chỉ khi giáo viên chủ
+    # động bật trong panel duyệt hàng loạt (kèm câu chữ chịu trách nhiệm)
+    # thì các câu đó mới được duyệt — thay cho việc click tay từng câu.
+    accept_low_confidence_ai: bool = False
 
 
 @router.post("/api/v1/source-exams/{exam_id}/approve-ready")
@@ -260,8 +277,9 @@ def approve_ready(exam_id: uuid.UUID, body: ApproveReadyIn, db: Session = Depend
     Server tự tính tập câu đủ điều kiện (client không gửi danh sách id):
     câu có đáp án đã đặt và nguồn thuộc nhóm nhận diện/giáo viên, hoặc đáp án
     AI với confidence của ai_solution mới nhất >= 0.70. Từng câu được duyệt
-    bằng đúng lõi _apply_approve của duyệt đơn — không nới lỏng validate nào.
-    Câu không đủ điều kiện bị bỏ qua kèm lý do, không chặn cả mẻ.
+    bằng đúng lõi _apply_approve của duyệt đơn — không nới lỏng validate nào,
+    NGOẠI TRỪ cổng 0.70 khi giáo viên bật accept_low_confidence_ai (xem
+    _apply_approve). Câu không đủ điều kiện bị bỏ qua kèm lý do, không chặn cả mẻ.
     """
     exam = _owned_exam(db, exam_id, user)
     unit_tag: Tag | None = None
@@ -282,7 +300,8 @@ def approve_ready(exam_id: uuid.UUID, body: ApproveReadyIn, db: Session = Depend
     approved_ids: list[str] = []
     skipped: list[dict] = []
     for q in rows:
-        reason = _bulk_skip_reason(db, q)
+        reason = _bulk_skip_reason(
+            db, q, accept_low_confidence_ai=body.accept_low_confidence_ai)
         if reason is not None:
             skipped.append({"question_id": str(q.id), "reason": reason})
             continue
@@ -298,7 +317,8 @@ def approve_ready(exam_id: uuid.UUID, body: ApproveReadyIn, db: Session = Depend
             # SAVEPOINT từng câu: 1 câu lỗi chỉ bị bỏ qua, không cuốn cả mẻ.
             with db.begin_nested():
                 _apply_approve(db, q, user, difficulty=difficulty,
-                               tag_codes=[unit_tag.code] if unit_tag else None)
+                               tag_codes=[unit_tag.code] if unit_tag else None,
+                               allow_low_confidence_ai=body.accept_low_confidence_ai)
         except HTTPException as e:
             skipped.append({"question_id": str(q.id), "reason": str(e.detail)})
             continue

@@ -267,6 +267,60 @@ def test_bulk_approve_without_ai_difficulty_keeps_difficulty_empty(ctx):
     assert q2.difficulty is None  # không dùng gợi ý AI -> để trống như duyệt đơn
 
 
+def test_bulk_approve_accept_low_confidence_ai_flag(ctx):
+    """accept_low_confidence_ai=True (GV chủ động bật): câu AI 0.15 được duyệt
+    hàng loạt; dấu vết kiểm toán giữ nguyên (answer_source vẫn ai_solved,
+    confidence vẫn 0.15). Câu chưa có đáp án VẪN bị bỏ qua dù flag bật."""
+    db, ua, exam_id = ctx["db"], ctx["ua"], ctx["exam_id"]
+    q1 = _q(db, exam_id, "since 2010")      # chưa có đáp án
+    q3 = _q(db, exam_id, "previous one")    # AI conf 0.15
+    _make_ai(db, q3, "A", 0.15)
+
+    res = approve_ready(exam_id, ApproveReadyIn(accept_low_confidence_ai=True),
+                        db=db, user=ua)
+    assert str(q3.id) in res["approved_ids"]
+    skipped = {s["question_id"]: s["reason"] for s in res["skipped"]}
+    assert "Chưa có đáp án" in skipped[str(q1.id)]  # flag không cứu câu trống
+
+    db.expire_all()
+    q3 = _q(db, exam_id, "previous one")
+    assert q3.status == QuestionStatus.approved
+    # Dấu vết kiểm toán KHÔNG đổi: vẫn là đáp án AI với độ tin cậy đã ghi.
+    assert q3.answer_source == AnswerSource.ai_solved
+    assert float(q3.answer_confidence) == pytest.approx(0.15)
+
+
+def test_bulk_approve_default_skips_low_confidence_ai(ctx):
+    """Không truyền flag (mặc định False): câu AI 0.15 bị bỏ qua như cũ."""
+    db, ua, exam_id = ctx["db"], ctx["ua"], ctx["exam_id"]
+    q3 = _q(db, exam_id, "previous one")
+    _make_ai(db, q3, "A", 0.15)
+
+    res = approve_ready(exam_id, ApproveReadyIn(), db=db, user=ua)
+    assert str(q3.id) not in res["approved_ids"]
+    skipped = {s["question_id"]: s["reason"] for s in res["skipped"]}
+    assert "độ tin cậy" in skipped[str(q3.id)]
+    db.expire_all()
+    assert _q(db, exam_id, "previous one").status == QuestionStatus.pending_review
+
+
+def test_single_review_low_confidence_ai_still_gated(ctx):
+    """Đường duyệt ĐƠN không bị nới: câu AI 0.15 duyệt tay không kèm
+    correct_label vẫn 422 (cổng 0.70); GV tự chọn đáp án thì duyệt được."""
+    db, ua, exam_id = ctx["db"], ctx["ua"], ctx["exam_id"]
+    q3 = _q(db, exam_id, "previous one")
+    _make_ai(db, q3, "A", 0.15)
+
+    with pytest.raises(HTTPException) as exc:
+        review_question(q3.id, ReviewIn(action="approve"), db=db, user=ua)
+    assert exc.value.status_code == 422
+
+    db.expire_all()
+    out = review_question(q3.id, ReviewIn(action="approve", correct_label="B"),
+                          db=db, user=ua)
+    assert out["status"] == "approved"
+
+
 def test_bulk_approve_invalid_unit_tag_422(ctx):
     db, ua, exam_id = ctx["db"], ctx["ua"], ctx["exam_id"]
     with pytest.raises(HTTPException) as exc:

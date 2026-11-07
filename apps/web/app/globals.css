@@ -208,6 +208,11 @@ main section { animation: eb-fade-up var(--dur-screen) var(--ease) both; }
 }
 .eb-ai-diff:hover { background: #EDE9FE; border-color: #5B21B6; }
 .eb-ai-diff:active { transform: scale(.97); }
+/* Nhãn "AI đã điền" cạnh ô Độ khó — chỉ là dấu hiệu nhìn, không bấm được
+   (thay chip "đề xuất — dùng mức này" phải bấm mới áp của bản trước). */
+.eb-ai-diff-tag { cursor: default; }
+.eb-ai-diff-tag:hover { background: #F5F0FF; border-color: #7C5CD6; }
+.eb-ai-diff-tag:active { transform: none; }
 
 /* ============ Ô chọn đề gốc dạng combobox (.eb-picker*) ============
    Thay <select> thuần: tìm kiếm + nhóm theo Lớp 10/11/12/Chưa xếp lớp,

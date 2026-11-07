@@ -173,6 +173,9 @@ export default function Home() {
   const [nearDups, setNearDups] = useState<{ number: number; stem_text: string; similarity: number }[]>([]);
   const [queue, setQueue] = useState<ReviewQueue | null>(null);
   const [revDiff, setRevDiff] = useState<Record<string, string>>({});
+  // Câu nào GV đã TỰ tay đổi ô Độ khó thì ghi vào đây: hiệu ứng tự điền từ
+  // ai_difficulty (dưới) không bao giờ ghi đè lựa chọn của GV trong phiên.
+  const [revDiffManual, setRevDiffManual] = useState<Record<string, boolean>>({});
   const [revUnit, setRevUnit] = useState<Record<string, string>>({});
   const [revAnswer, setRevAnswer] = useState<Record<string, string>>({});
   const [activeQ, setActiveQ] = useState("");
@@ -238,7 +241,12 @@ export default function Home() {
   // Duyệt hàng loạt các câu đủ tin cậy (panel xác nhận nội tuyến ở tab Duyệt)
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkUnitId, setBulkUnitId] = useState("");
-  const [bulkUseAiDiff, setBulkUseAiDiff] = useState(false);
+  // Mặc định BẬT theo yêu cầu GV (2026-11-07): duyệt hàng loạt dùng luôn độ
+  // khó AI đề xuất cho các câu có gợi ý, GV đỡ phải chọn tay từng câu.
+  const [bulkUseAiDiff, setBulkUseAiDiff] = useState(true);
+  // Mặc định TẮT: chấp nhận cả đáp án AI tin cậy < 70% khi duyệt hàng loạt —
+  // quyết định thay nhiều cú click chọn tay, GV phải chủ động bật kèm cảnh báo.
+  const [bulkAcceptLowAi, setBulkAcceptLowAi] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkSummary, setBulkSummary] = useState<{ approved: number; skipped: { question_id: string; reason: string }[] } | null>(null);
   const [templates, setTemplates] = useState<ExamTemplate[]>([]);
@@ -457,6 +465,11 @@ export default function Home() {
     if (q.answer_source === "ai_solved") return (q.ai_solution?.confidence ?? q.answer_confidence ?? 0) >= 0.7;
     return TRUSTED_SOURCES.includes(q.answer_source);
   };
+  // Câu AI đã có đáp án nhưng tin cậy < 70%: bình thường bị duyệt hàng loạt bỏ
+  // qua; CHỈ được duyệt khi GV bật tuỳ chọn accept_low_confidence_ai ở panel.
+  const bulkLowAi = (q: QuestionItem): boolean =>
+    !!q.correct_option_id && q.answer_source === "ai_solved"
+    && (q.ai_solution?.confidence ?? q.answer_confidence ?? 0) < 0.7;
 
   async function doBulkApprove() {
     if (!impExamId || bulkBusy) return;
@@ -464,7 +477,7 @@ export default function Home() {
     try {
       const r = await api<BulkApproveResult>(`/api/v1/source-exams/${impExamId}/approve-ready`, {
         method: "POST",
-        body: JSON.stringify({ unit_tag_id: bulkUnitId || null, use_ai_difficulty: bulkUseAiDiff }),
+        body: JSON.stringify({ unit_tag_id: bulkUnitId || null, use_ai_difficulty: bulkUseAiDiff, accept_low_confidence_ai: bulkAcceptLowAi }),
       });
       setBulkSummary({ approved: r.approved_count, skipped: r.skipped });
       setBulkOpen(false);
@@ -478,6 +491,26 @@ export default function Home() {
     api<ReviewQueue>(`/api/v1/source-exams/${examId}/review-queue`).then(setQueue).catch((e) => setError(e.message));
   }, []);
   useEffect(() => { if (tab === "review" && impExamId) loadQueue(impExamId); }, [tab, impExamId, loadQueue]);
+
+  // Độ khó AI TỰ ĐIỀN SẴN vào ô Độ khó của thẻ (yêu cầu GV 2026-11-07 — bỏ
+  // bước bấm chip "đề xuất" thừa): mỗi khi hàng chờ (tải lại), câu nào có
+  // ai_difficulty thì revDiff được khởi tạo/cập nhật theo gợi ý đó, TRỪ câu
+  // GV đã tự tay đổi trong phiên này (revDiffManual) — không ghi đè GV.
+  // GV vẫn sửa tự do bằng dropdown như thường.
+  useEffect(() => {
+    if (!queue) return;
+    setRevDiff((prev) => {
+      let next = prev;
+      for (const q of queue.items) {
+        if (!q.ai_difficulty || revDiffManual[q.id]) continue;
+        if (next[q.id] !== q.ai_difficulty) {
+          if (next === prev) next = { ...prev };
+          next[q.id] = q.ai_difficulty;
+        }
+      }
+      return next;
+    });
+  }, [queue, revDiffManual]);
 
   async function doReview(q: QuestionItem, action: "approve" | "reject") {
     const body: Record<string, unknown> = { action };
@@ -519,6 +552,8 @@ export default function Home() {
     const blankNo = blankNoOf(q);
     const isBlankStem = /^Chỗ trống số \d+/.test((q.stem_text || "").trim());
     const aiLocked = q.answer_source === "ai_solved" && (q.answer_confidence ?? 0) < 0.7 && !revAnswer[q.id];
+    // Ô Độ khó đang mang giá trị do AI điền sẵn (chưa bị GV sửa tay trong phiên)
+    const diffByAi = !!q.ai_difficulty && !revDiffManual[q.id] && revDiff[q.id] === q.ai_difficulty;
     return (
       <div key={q.id} onClick={() => setActiveQ(q.id)}
         style={{ ...box, cursor: "pointer", ...(isActive ? { border: "2px solid #F59E0B", boxShadow: "0 2px 4px rgb(16 27 60 / .08), 0 16px 32px -12px rgb(245 158 11 / .45)" } : {}) }}>
@@ -565,9 +600,13 @@ export default function Home() {
             <b>✦ AI giải thích</b> <span style={{ color: "#4A5578" }}>({q.ai_solution.model} · tin cậy {Math.round(q.ai_solution.confidence * 100)}%
             {q.ai_solution.suggested_difficulty ? ` · gợi ý độ khó ${q.ai_solution.suggested_difficulty}` : ""})</span>
             <div dangerouslySetInnerHTML={{ __html: q.ai_solution.explanation_html || "" }} />
-            {q.ai_solution.confidence < 0.7 && (
+            {q.ai_solution.confidence < 0.7 ? (
               <div style={{ color: "#B91C1C", fontWeight: 650 }}>
                 AI chưa chắc chắn — nút Duyệt bị khoá cho đến khi bạn tự chọn đáp án đúng ở lưới phương án phía trên.
+              </div>
+            ) : (
+              <div style={{ color: "#2547D0", fontWeight: 600 }}>
+                AI đã chọn đáp án này (tin cậy {Math.round(q.ai_solution.confidence * 100)}%) — bấm Duyệt vào kho để xác nhận, hoặc bấm phương án khác nếu không đồng ý.
               </div>
             )}
           </div>
@@ -578,14 +617,13 @@ export default function Home() {
           </div>
         )}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-          {q.ai_difficulty && !revDiff[q.id] && (
-            <button type="button" className="eb-ai-diff"
-              title="AI đề xuất mức độ khó cho câu này — bấm để dùng, vẫn sửa lại được ở ô Độ khó bên cạnh"
-              onClick={() => setRevDiff({ ...revDiff, [q.id]: q.ai_difficulty! })}>
-              ✦ AI đề xuất: {q.ai_difficulty} — dùng mức này
-            </button>
+          {diffByAi && (
+            <span className="eb-ai-diff eb-ai-diff-tag"
+              title="Ô Độ khó đã được AI điền sẵn theo gợi ý của lần giải gần nhất — GV cứ đổi ở ô Độ khó bên cạnh nếu thấy chưa đúng">
+              ✦ AI đã điền: {revDiff[q.id]} — đổi nếu cần
+            </span>
           )}
-          <select value={revDiff[q.id] || ""} onChange={(e) => setRevDiff({ ...revDiff, [q.id]: e.target.value })} style={{ padding: 8 }}>
+          <select value={revDiff[q.id] || ""} onChange={(e) => { setRevDiff({ ...revDiff, [q.id]: e.target.value }); setRevDiffManual({ ...revDiffManual, [q.id]: true }); }} style={{ padding: 8 }}>
             <option value="">— Độ khó —</option><option>NB</option><option>TH</option><option>VD</option><option>VDC</option>
           </select>
           <select value={revUnit[q.id] || ""} onChange={(e) => setRevUnit({ ...revUnit, [q.id]: e.target.value })} style={{ padding: 8 }}>
@@ -789,6 +827,8 @@ export default function Home() {
             const noAnswerCount = items.filter((q) => q.status === "needs_answer" && !q.correct_option_id && !revAnswer[q.id]).length;
             const aiSolvedCount = items.filter((q) => q.answer_source === "ai_solved").length;
             const bulkCount = items.filter(bulkEligible).length;
+            const bulkLowAiCount = items.filter(bulkLowAi).length;
+            const bulkTotal = bulkCount + (bulkAcceptLowAi ? bulkLowAiCount : 0);
             // Gom nhóm: các câu LIÊN TIẾP có cùng passage_text thành 1 nhóm đoạn văn.
             type RevGroup = { key: string; passage: QuestionItem | null; items: QuestionItem[] };
             const groups: RevGroup[] = [];
@@ -828,12 +868,12 @@ export default function Home() {
                         ↻ AI giải lại các câu AI đã giải ({aiSolvedCount})
                       </button>
                     )}
-                    {bulkCount > 0 && (
+                    {(bulkCount > 0 || bulkLowAiCount > 0) && (
                       <button disabled={bulkBusy}
-                        title="Duyệt một lượt các câu có đáp án đáng tin cậy — câu AI dưới 70% tin cậy luôn bị bỏ qua"
+                        title="Duyệt một lượt các câu có đáp án đáng tin cậy — câu AI dưới 70% tin cậy chỉ được duyệt khi bạn chủ động bật tuỳ chọn trong panel"
                         style={{ padding: "9px 16px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, opacity: bulkBusy ? 0.7 : 1 }}
                         onClick={() => { setBulkSummary(null); setBulkOpen((o) => !o); }}>
-                        ✓ Duyệt hàng loạt câu đủ tin cậy ({bulkCount})
+                        ✓ Duyệt hàng loạt: {bulkCount} câu đủ tin cậy{bulkLowAiCount > 0 ? ` · ${bulkLowAiCount} câu AI dưới 70%` : ""}
                       </button>
                     )}
                     {solveMsg && <span style={{ fontSize: 13.5, color: "#DCE4FF" }}>{solveMsg}</span>}
@@ -845,11 +885,16 @@ export default function Home() {
                   )}
                   {bulkOpen && (
                     <div style={{ marginTop: 12, background: "#fff", color: "#101B3C", borderRadius: 12, padding: 14 }}>
-                      <div style={{ fontWeight: 750, marginBottom: 4 }}>Duyệt hàng loạt {bulkCount} câu đủ tin cậy</div>
+                      <div style={{ fontWeight: 750, marginBottom: 4 }}>
+                        Duyệt hàng loạt {bulkTotal} câu
+                        <span style={{ fontWeight: 600, color: "#4A5578", fontSize: 13 }}>
+                          {" "}({bulkCount} câu đủ tin cậy{bulkLowAiCount > 0 ? ` · ${bulkLowAiCount} câu AI tin cậy dưới 70%${bulkAcceptLowAi ? " — ĐÃ gồm nhờ tuỳ chọn bên dưới" : " — đang bị bỏ qua"}` : ""})
+                        </span>
+                      </div>
                       <div style={{ fontSize: 13, color: "#4A5578", marginBottom: 10 }}>
-                        Chỉ duyệt câu có đáp án từ tô đỏ / highlight / bảng đáp án / bạn tự chọn, hoặc đáp án AI có
-                        độ tin cậy từ 70% trở lên. Câu AI chưa chắc chắn (dưới 70%) sẽ bị bỏ qua — không có ngoại lệ,
-                        bạn vẫn phải tự chọn đáp án và duyệt từng câu như trước.
+                        Câu đủ tin cậy: đáp án từ tô đỏ / highlight / bảng đáp án / bạn tự chọn, hoặc đáp án AI có
+                        độ tin cậy từ 70% trở lên. Câu AI chưa chắc chắn (dưới 70%) mặc định bị bỏ qua — chỉ được
+                        duyệt khi bạn chủ động bật tuỳ chọn chấp nhận bên dưới.
                       </div>
                       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
                         <label style={{ fontSize: 13.5, fontWeight: 600 }}>
@@ -864,13 +909,24 @@ export default function Home() {
                           Dùng độ khó AI đề xuất cho các câu
                         </label>
                         <span style={{ flex: 1 }} />
-                        <button disabled={bulkBusy}
-                          style={{ padding: "8px 14px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, opacity: bulkBusy ? 0.7 : 1 }}
+                        <button disabled={bulkBusy || bulkTotal === 0}
+                          style={{ padding: "8px 14px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, opacity: bulkBusy || bulkTotal === 0 ? 0.7 : 1 }}
                           onClick={doBulkApprove}>
-                          {bulkBusy ? "Đang duyệt…" : `Duyệt ${bulkCount} câu`}
+                          {bulkBusy ? "Đang duyệt…" : `Duyệt ${bulkTotal} câu`}
                         </button>
                         <button disabled={bulkBusy} style={btn} onClick={() => setBulkOpen(false)}>Huỷ</button>
                       </div>
+                      {bulkLowAiCount > 0 && (
+                        <label style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13.5, background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
+                          <input type="checkbox" checked={bulkAcceptLowAi} onChange={(e) => setBulkAcceptLowAi(e.target.checked)} style={{ marginTop: 2 }} />
+                          <span>
+                            <b>Chấp nhận cả đáp án AI độ tin cậy dưới 70%</b> (kèm các câu demo nếu chưa giải lại) — tôi đã xem qua danh sách và chịu trách nhiệm.
+                            <span style={{ display: "block", color: "#92400E", fontSize: 12.5, marginTop: 2 }}>
+                              Khi bật, {bulkLowAiCount} câu AI tin cậy thấp cũng được duyệt luôn trong mẻ này, thay cho việc bạn phải tự chọn đáp án từng câu. Đáp án vẫn ghi nguồn AI kèm độ tin cậy thật để tra cứu sau.
+                            </span>
+                          </span>
+                        </label>
+                      )}
                     </div>
                   )}
                   {bulkSummary && (
