@@ -81,6 +81,7 @@ export interface Workspace { id: string; name: string; school_name: string | nul
 export interface SourceExam {
   id: string; workspace_id: string; title: string; grade: number | null;
   exam_kind: string | null; source_name: string | null; school_year: string | null;
+  created_at: string | null;
 }
 export interface Tag { id: string; kind: string; code: string; label: string }
 export interface QuestionItem {
@@ -103,7 +104,7 @@ export interface ConflictResult {
   duplicate_count: number; new_count: number; duplicates: DuplicateComparison[];
 }
 export interface ReviewQueue { items: QuestionItem[]; total: number }
-export interface SolveResult { mode: string; provider: string; model: string; total: number; solved?: number; failed?: number; low_confidence?: number; cost_usd?: number; task_id?: string }
+export interface SolveResult { mode: string; provider: string; model: string; total: number; solved?: number; failed?: number; low_confidence?: number; cost_usd?: number; task_id?: string; fallback?: boolean }
 export interface QuestionPage { items: QuestionItem[]; total: number; page: number; page_size: number }
 
 export interface TemplateSection { name: string; question_type: string; passage_type: string | null; question_count: number; difficulty_mix: Record<string, number> }

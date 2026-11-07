@@ -3,6 +3,109 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, clearToken, downloadExamPackage, getToken, ConflictResult, ExamTemplate, GeneratedExam, ImportResult, ImportStats, QuestionItem, QuestionPage, ReviewQueue, SolveResult, SourceExam, Tag, Workspace } from "../lib/api";
 
+// ===== Ô chọn đề gốc dạng combobox (thay <select> thuần) =====
+// Khi có nhiều đề / nhiều nhánh (lớp, loại đề, năm học), <select> thuần rất khó chọn:
+// combobox này có ô tìm kiếm + gom nhóm theo lớp, đề mới nhất lên trước trong nhóm.
+const EXAM_KIND_LABELS: Record<string, string> = {
+  "15min": "15 phút", "45min": "45 phút", mid_term: "Giữa kỳ",
+  final: "Cuối kỳ", graduation: "Tốt nghiệp", mock: "Thi thử",
+};
+function examKindLabel(kind: string | null): string | null {
+  if (!kind) return null;
+  return EXAM_KIND_LABELS[kind] || kind;
+}
+
+function ExamPicker({ exams, value, onChange, dark = false }: {
+  exams: SourceExam[]; value: string; onChange: (id: string) => void; dark?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = exams.find((e) => e.id === value) || null;
+
+  // Đóng khi bấm ra ngoài hoặc nhấn Esc
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (ev: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(ev.target as Node)) setOpen(false);
+    };
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open ]);
+
+  const q = query.trim().toLowerCase();
+  const matches = (e: SourceExam) => !q
+    || e.title.toLowerCase().includes(q)
+    || (examKindLabel(e.exam_kind) || "").toLowerCase().includes(q)
+    || (e.exam_kind || "").toLowerCase().includes(q)
+    || (e.school_year || "").toLowerCase().includes(q);
+  const byNewest = (a: SourceExam, b: SourceExam) => (b.created_at || "").localeCompare(a.created_at || "");
+  const groups: { label: string; items: SourceExam[] }[] = [];
+  for (const g of [10, 11, 12]) {
+    const items = exams.filter((e) => e.grade === g && matches(e)).sort(byNewest);
+    if (items.length) groups.push({ label: `Lớp ${g}`, items });
+  }
+  const ungraded = exams.filter((e) => e.grade !== 10 && e.grade !== 11 && e.grade !== 12 && matches(e)).sort(byNewest);
+  if (ungraded.length) groups.push({ label: "Chưa xếp lớp", items: ungraded });
+  const shownCount = groups.reduce((n, g) => n + g.items.length, 0);
+
+  return (
+    <div ref={rootRef} className={`eb-picker${dark ? " eb-picker-dark" : ""}`}>
+      <button type="button" className="eb-picker-btn" aria-haspopup="listbox" aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}>
+        {selected ? (
+          <>
+            <span className="eb-picker-title">{selected.title}</span>
+            {selected.grade ? <span className="eb-picker-grade">Lớp {selected.grade}</span> : null}
+          </>
+        ) : (
+          <span className="eb-picker-placeholder">— Chọn đề gốc —</span>
+        )}
+        <span className={`eb-picker-caret${open ? " open" : ""}`}>▾</span>
+      </button>
+      {open && (
+        <div className="eb-picker-panel" role="listbox" aria-label="Danh sách đề gốc">
+          <div className="eb-picker-search">
+            <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+              placeholder="🔎 Tìm theo tên đề, loại đề, năm học…" />
+          </div>
+          <div className="eb-picker-list">
+            {exams.length === 0 && <div className="eb-picker-empty">Chưa có đề gốc nào trong workspace này.</div>}
+            {exams.length > 0 && shownCount === 0 && (
+              <div className="eb-picker-empty">Không tìm thấy đề khớp “{query}” — thử từ khoá ngắn hơn.</div>
+            )}
+            {groups.map((g) => (
+              <div key={g.label}>
+                <div className="eb-picker-group">{g.label}</div>
+                {g.items.map((e) => {
+                  const isSel = e.id === value;
+                  const meta = [examKindLabel(e.exam_kind), e.school_year].filter(Boolean).join(" · ");
+                  return (
+                    <button key={e.id} type="button" role="option" aria-selected={isSel}
+                      className={`eb-picker-item${isSel ? " sel" : ""}`}
+                      onClick={() => { onChange(e.id); setOpen(false); setQuery(""); }}>
+                      <span className="eb-picker-item-main">
+                        <span className="eb-picker-item-title">{e.title}</span>
+                        {meta && <span className="eb-picker-item-meta">{meta}</span>}
+                      </span>
+                      {isSel && <span className="eb-picker-check">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [tab, setTab] = useState<"exams" | "bank" | "import" | "review" | "builder">("exams");
@@ -129,6 +232,7 @@ export default function Home() {
   }
 
   const [solveMsg, setSolveMsg] = useState("");
+  const [solveInfo, setSolveInfo] = useState("");
   const [aiSolving, setAiSolving] = useState(false);
   const aiPollGenRef = useRef(0);
   const [templates, setTemplates] = useState<ExamTemplate[]>([]);
@@ -268,6 +372,7 @@ export default function Home() {
   async function doSolveAI() {
     if (!impExamId) { setError("Hãy chọn đề gốc trước"); return; }
     if (aiSolving) return;
+    setSolveInfo("");
     setSolveMsg("Đang giao AI giải...");
     try {
       const r = await api<SolveResult>(`/api/v1/source-exams/${impExamId}/solve-ai`, { method: "POST" });
@@ -297,6 +402,9 @@ export default function Home() {
         }
         loadQueue(impExamId);
       } else {
+        // Backend báo fallback=true: hàng đợi nền chưa sẵn sàng nên đã giải trực tiếp
+        // ngay trong request — đây là thông tin (info), không phải lỗi.
+        if (r.fallback) setSolveInfo("Đã giải trực tiếp vì hàng đợi nền chưa sẵn sàng.");
         setSolveMsg(`AI (${r.model}) đã giải ${r.solved ?? 0}/${r.total} câu · ${r.low_confidence ?? 0} câu độ tin cậy thấp cần kiểm tra kỹ · chi phí ước tính $${(r.cost_usd ?? 0).toFixed(4)}.`);
         loadQueue(impExamId);
       }
@@ -518,10 +626,7 @@ export default function Home() {
         <section>
           <div style={{ ...box, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <span>Nạp vào đề gốc:</span>
-            <select value={impExamId} onChange={(e) => setImpExamId(e.target.value)} style={{ padding: 9 }}>
-              <option value="">— Chọn đề gốc —</option>
-              {exams.map((e) => (<option key={e.id} value={e.id}>{e.title}</option>))}
-            </select>
+            <ExamPicker exams={exams} value={impExamId} onChange={setImpExamId} />
             <label style={{ ...btn, display: "inline-block" }}>
               Hoặc tải file .docx
               <input type="file" accept=".docx" style={{ display: "none" }}
@@ -634,10 +739,7 @@ export default function Home() {
                 <div style={{ ...box, background: "linear-gradient(135deg, #101B3C 0%, #1B37A8 100%)", color: "#fff", border: "0" }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 700 }}>Đề gốc:</span>
-                    <select value={impExamId} onChange={(e) => setImpExamId(e.target.value)} style={{ padding: 9 }}>
-                      <option value="">— Chọn đề gốc —</option>
-                      {exams.map((e) => (<option key={e.id} value={e.id}>{e.title}</option>))}
-                    </select>
+                    <ExamPicker dark exams={exams} value={impExamId} onChange={setImpExamId} />
                     <span style={{ background: "rgb(255 255 255 / .14)", border: "1px solid rgb(255 255 255 / .25)", padding: "6px 12px", borderRadius: 999, fontSize: 13.5 }}>
                       Đang chờ duyệt: <b className="numeric">{queue?.total ?? 0}</b> câu
                     </span>
@@ -656,6 +758,11 @@ export default function Home() {
                     </button>
                     {solveMsg && <span style={{ fontSize: 13.5, color: "#DCE4FF" }}>{solveMsg}</span>}
                   </div>
+                  {solveInfo && (
+                    <div style={{ marginTop: 10, background: "#DBEAFE", color: "#1E3A8A", border: "1px solid #93C5FD", borderRadius: 10, padding: "8px 12px", fontSize: 13.5, fontWeight: 600 }}>
+                      ℹ️ {solveInfo}
+                    </div>
+                  )}
                 </div>
                 {queue && queue.total === 0 && <p>Hàng đợi trống — mọi câu của đề này đã được xử lý.</p>}
                 {groups.map((g) => {

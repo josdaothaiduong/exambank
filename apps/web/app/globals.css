@@ -209,6 +209,84 @@ main section { animation: eb-fade-up var(--dur-screen) var(--ease) both; }
 .eb-ai-diff:hover { background: #EDE9FE; border-color: #5B21B6; }
 .eb-ai-diff:active { transform: scale(.97); }
 
+/* ============ Ô chọn đề gốc dạng combobox (.eb-picker*) ============
+   Thay <select> thuần: tìm kiếm + nhóm theo Lớp 10/11/12/Chưa xếp lớp,
+   đề mới nhất trước trong nhóm; panel cuộn, đóng bằng Esc / bấm ra ngoài. */
+.eb-picker { position: relative; min-width: min(320px, 100%); flex: 0 1 380px; }
+.eb-picker-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 9px 12px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius-md);
+  font-weight: 600; text-align: left;
+  box-shadow: 0 1px 2px rgb(16 27 60 / .05);
+}
+.eb-picker-btn:hover { border-color: var(--brand); }
+.eb-picker-title {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.eb-picker-placeholder { flex: 1; color: var(--ink-2); font-weight: 500; }
+.eb-picker-grade {
+  flex: 0 0 auto;
+  background: var(--brand-soft); color: var(--brand-hover);
+  font-size: 12px; font-weight: 700;
+  padding: 2px 8px; border-radius: var(--radius-full);
+}
+.eb-picker-caret {
+  flex: 0 0 auto; color: var(--ink-2); font-size: 12px;
+  transition: transform var(--dur-card) var(--ease);
+}
+.eb-picker-caret.open { transform: rotate(180deg); }
+/* Biến thể trên nền navy (thanh đầu tab Duyệt): nút sáng mờ, panel vẫn trắng dễ đọc */
+.eb-picker-dark .eb-picker-btn {
+  background: rgb(255 255 255 / .10); color: #fff;
+  border-color: rgb(255 255 255 / .28); box-shadow: none;
+}
+.eb-picker-dark .eb-picker-btn:hover { border-color: rgb(255 255 255 / .65); }
+.eb-picker-dark .eb-picker-placeholder { color: #C7D2F5; }
+.eb-picker-dark .eb-picker-grade { background: rgb(255 255 255 / .18); color: #fff; }
+.eb-picker-dark .eb-picker-caret { color: #C7D2F5; }
+.eb-picker-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  width: min(430px, 92vw);
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lift);
+  overflow: hidden;
+  animation: eb-fade-up var(--dur-card) var(--ease) both;
+}
+.eb-picker-search { padding: 10px; border-bottom: 1px solid var(--line); background: #F7FAFF; }
+.eb-picker-search input { width: 100%; padding: 9px 11px; }
+.eb-picker-list { max-height: 320px; overflow-y: auto; padding: 6px; }
+.eb-picker-group {
+  position: sticky; top: -6px;
+  padding: 8px 10px 4px;
+  background: var(--surface);
+  font-size: 11.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-2);
+}
+.eb-picker-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 9px 10px;
+  background: transparent; border: 0; border-radius: var(--radius-md);
+  text-align: left; color: var(--ink);
+}
+.eb-picker-item:hover { background: var(--brand-soft); }
+.eb-picker-item.sel { background: var(--brand-soft); }
+.eb-picker-item-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.eb-picker-item-title {
+  font-weight: 650; font-size: 14.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.eb-picker-item.sel .eb-picker-item-title { color: var(--brand-hover); }
+.eb-picker-item-meta { font-size: 12.5px; color: var(--ink-2); }
+.eb-picker-check { flex: 0 0 auto; color: var(--brand); font-weight: 900; }
+.eb-picker-empty { padding: 16px 12px; color: var(--ink-2); font-size: 14px; text-align: center; }
+@media (max-width: 700px) {
+  .eb-picker { flex: 1 1 100%; }
+}
+
 /* Mobile: sidebar thu thành thanh ngang cuộn được */
 @media (max-width: 900px) {
   .eb-shell { grid-template-columns: 1fr; }
