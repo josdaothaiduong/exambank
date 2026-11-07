@@ -291,30 +291,34 @@ export default function Home() {
     } catch (err: any) { setError(err.message); }
   }
 
-  const box: React.CSSProperties = { border: "1px solid #dde3ee", borderRadius: 12, padding: 16, marginBottom: 12, background: "#fff" };
-  const btn: React.CSSProperties = { padding: "8px 14px", borderRadius: 999, border: "1px solid #c6d0e4", background: "#fff", cursor: "pointer", fontWeight: 650 };
+  const box: React.CSSProperties = { border: "1px solid #E3E8F4", borderRadius: 16, padding: 18, marginBottom: 12, background: "#fff", boxShadow: "0 1px 2px rgb(16 27 60 / .05), 0 10px 24px -14px rgb(16 27 60 / .14)" };
+  const btn: React.CSSProperties = { padding: "8px 14px", borderRadius: 12, border: "1px solid #C9D4EE", background: "#fff", cursor: "pointer", fontWeight: 600 };
 
   return (
-    <main>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>ExamBank AI</h1>
-        <button style={btn} onClick={() => { clearToken(); router.push("/login"); }}>Đăng xuất</button>
-      </div>
-      {error && <p style={{ color: "#b42318" }}>{error}</p>}
-      <label>
-        Workspace:{" "}
-        <select value={wsId} onChange={(e) => setWsId(e.target.value)} style={{ padding: 8 }}>
-          {workspaces.map((w) => (<option key={w.id} value={w.id}>{w.name}</option>))}
-        </select>
-      </label>
+    <div className="eb-shell">
+      <aside className="eb-side">
+        <h1 className="eb-logo"><span className="eb-mark">📚</span> ExamBank AI</h1>
+        <div className="eb-side-label">Giảng dạy</div>
+        <nav className="eb-nav">
+          <button className={tab === "exams" ? "eb-on" : ""} onClick={() => setTab("exams")}>📖 Đề gốc</button>
+          <button className={tab === "bank" ? "eb-on" : ""} onClick={() => setTab("bank")}>🗂 Kho câu hỏi</button>
+          <button className={tab === "import" ? "eb-on" : ""} onClick={() => setTab("import")}>📥 Nhập đề</button>
+          <button className={tab === "review" ? "eb-on" : ""} onClick={() => setTab("review")}>✅ Duyệt câu hỏi</button>
+          <button className={tab === "builder" ? "eb-on" : ""} onClick={() => setTab("builder")}>🧩 Tạo đề</button>
+        </nav>
+        <div className="eb-side-foot">
+          <label>
+            Workspace
+            <select value={wsId} onChange={(e) => setWsId(e.target.value)}>
+              {workspaces.map((w) => (<option key={w.id} value={w.id}>{w.name}</option>))}
+            </select>
+          </label>
+          <button className="eb-logout" onClick={() => { clearToken(); router.push("/login"); }}>Đăng xuất</button>
+        </div>
+      </aside>
 
-      <div style={{ display: "flex", gap: 8, margin: "16px 0", flexWrap: "wrap" }}>
-        <button style={{ ...btn, ...(tab === "exams" ? { background: "#173a7a", color: "#fff" } : {}) }} onClick={() => setTab("exams")}>Đề gốc</button>
-        <button style={{ ...btn, ...(tab === "bank" ? { background: "#173a7a", color: "#fff" } : {}) }} onClick={() => setTab("bank")}>Kho câu hỏi</button>
-        <button style={{ ...btn, ...(tab === "import" ? { background: "#173a7a", color: "#fff" } : {}) }} onClick={() => setTab("import")}>Nhập đề</button>
-        <button style={{ ...btn, ...(tab === "review" ? { background: "#173a7a", color: "#fff" } : {}) }} onClick={() => setTab("review")}>Duyệt câu hỏi</button>
-        <button style={{ ...btn, ...(tab === "builder" ? { background: "#173a7a", color: "#fff" } : {}) }} onClick={() => setTab("builder")}>Tạo đề</button>
-      </div>
+      <main className="eb-main">
+      {error && <p style={{ color: "#B91C1C", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: "10px 14px" }}>{error}</p>}
 
       {tab === "exams" && (
         <section>
@@ -327,7 +331,7 @@ export default function Home() {
               <option value="15min">15 phút</option><option value="45min">45 phút</option>
               <option value="mid_term">Giữa kỳ</option><option value="final">Cuối kỳ</option><option value="graduation">Tốt nghiệp</option>
             </select>
-            <button style={{ padding: "9px 16px", background: "#173a7a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }}>+ Tạo đề gốc</button>
+            <button style={{ padding: "9px 16px", background: "#2547D0", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }}>+ Tạo đề gốc</button>
           </form>
           {exams.length === 0 && <p>Chưa có đề gốc nào trong workspace này.</p>}
           {exams.map((e) => (
@@ -362,7 +366,7 @@ export default function Home() {
           {(bank?.items || []).map((q) => (
             <div key={q.id} style={box}>
               <b>{q.stem_text}</b>
-              <div style={{ color: "#53627f", fontSize: 13, marginTop: 4 }}>
+              <div style={{ color: "#4A5578", fontSize: 13, marginTop: 4 }}>
                 {q.question_type} · {q.difficulty || "-"} · {q.status} · đáp án từ: {q.answer_source} · {q.tags.join(", ")}
               </div>
               <div style={{ fontSize: 13 }}>{q.options.map((o) => `${o.label}. ${o.content_text}`).join("   ")}</div>
@@ -386,14 +390,14 @@ export default function Home() {
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) doImportDocx(f); e.target.value = ""; }} />
             </label>
           </div>
-          <p style={{ color: "#53627f", fontSize: 13 }}>
+          <p style={{ color: "#4A5578", fontSize: 13 }}>
             Dán đề từ Word/PDF vào ô dưới (giữ nguyên đáp án tô đỏ hoặc highlight), mỗi câu bắt đầu bằng
             "Question 1:" và các phương án A. B. C. D. — hệ thống tự tách câu và nhận đáp án, không chắc thì để trống chờ duyệt.
           </p>
           <div ref={pasteRef} contentEditable suppressContentEditableWarning
-            style={{ border: "1.5px dashed #9db4dd", borderRadius: 12, padding: 14, minHeight: 130, background: "#fbfcff" }} />
+            style={{ border: "1.5px dashed #9DB4E8", borderRadius: 16, padding: 14, minHeight: 130, background: "#F7FAFF" }} />
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button style={{ padding: "9px 16px", background: "#173a7a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={doImportPaste}>
+            <button style={{ padding: "9px 16px", background: "#2547D0", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }} onClick={doImportPaste}>
               Phân tích &amp; nạp vào kho
             </button>
             <button style={btn} onClick={() => { if (pasteRef.current) pasteRef.current.innerHTML = '<p>Question 1: She has lived here ______ 2010. A. for B. <span style="color:#ff0000">since</span> C. in D. at</p><p>Question 2: The room ______ every day. A. cleans B. <span style="color:#ff0000">is cleaned</span> C. cleaned D. cleaning</p>'; }}>
@@ -409,15 +413,15 @@ export default function Home() {
                 Bạn muốn xử lý các câu trùng thế nào? (Còn <b>{conflict.new_count} câu mới</b> sẽ được nạp trong mọi trường hợp.)
               </p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                <button style={{ padding: "9px 14px", background: "#b45309", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={() => runImport("overwrite")}>
+                <button style={{ padding: "9px 14px", background: "#b45309", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }} onClick={() => runImport("overwrite")}>
                   Ghi đè tất cả câu trùng bằng bản mới
                 </button>
-                <button style={{ padding: "9px 14px", background: "#173a7a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={() => runImport("keep_old")}>
+                <button style={{ padding: "9px 14px", background: "#2547D0", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }} onClick={() => runImport("keep_old")}>
                   Giữ bản cũ — chỉ nạp {conflict.new_count} câu mới
                 </button>
                 <button style={btn} onClick={() => setConflict(null)}>Huỷ — không nạp gì cả</button>
               </div>
-              <p style={{ fontSize: 13, color: "#53627f", margin: "4px 0 10px" }}>
+              <p style={{ fontSize: 13, color: "#4A5578", margin: "4px 0 10px" }}>
                 Hoặc xem từng câu bên dưới, chọn riêng cho từng câu rồi bấm "Áp dụng lựa chọn từng câu". Lưu ý: câu đã duyệt mà bị ghi đè sẽ quay về trạng thái chờ duyệt.
               </p>
               {conflict.duplicates.map((d) => (
@@ -427,15 +431,15 @@ export default function Home() {
                       <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309" }}>BẢN MỚI NẠP — Câu {d.number}</div>
                       <div style={{ fontSize: 14, margin: "4px 0" }}>{d.new.stem_text}</div>
                       <div style={{ fontSize: 13 }}>{d.new.options.map((o) => `${o.label}. ${o.content_text}`).join("   ")}</div>
-                      <div style={{ fontSize: 13, color: "#53627f" }}>
+                      <div style={{ fontSize: 13, color: "#4A5578" }}>
                         Đáp án nhận diện: {d.new.detected_answer ? `${d.new.detected_answer.label} (${d.new.detected_answer.source})` : "chưa có"}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "#173a7a" }}>BẢN ĐANG CÓ TRONG KHO</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#2547D0" }}>BẢN ĐANG CÓ TRONG KHO</div>
                       <div style={{ fontSize: 14, margin: "4px 0" }}>{d.existing.stem_text}</div>
                       <div style={{ fontSize: 13 }}>{d.existing.options.map((o) => `${o.label}. ${o.content_text}`).join("   ")}</div>
-                      <div style={{ fontSize: 13, color: "#53627f" }}>
+                      <div style={{ fontSize: 13, color: "#4A5578" }}>
                         Từ đề: {d.existing.source_exam_title || "—"} · Trạng thái: {d.existing.status} · Đáp án hiện tại: {d.existing.correct_label || "chưa có"} ({d.existing.answer_source})
                       </div>
                     </div>
@@ -452,7 +456,7 @@ export default function Home() {
                   </div>
                 </div>
               ))}
-              <button style={{ padding: "9px 14px", background: "#12703a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={() => runImport("decide", decisions)}>
+              <button style={{ padding: "9px 14px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }} onClick={() => runImport("decide", decisions)}>
                 Áp dụng lựa chọn từng câu
               </button>
             </div>
@@ -481,37 +485,37 @@ export default function Home() {
               {exams.map((e) => (<option key={e.id} value={e.id}>{e.title}</option>))}
             </select>
             <span>Đang chờ duyệt: <b>{queue?.total ?? 0}</b> câu</span>
-            <button style={{ padding: "8px 14px", background: "#6d28d9", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={doSolveAI}>
+            <button style={{ padding: "8px 14px", background: "#6d28d9", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }} onClick={doSolveAI}>
               ✦ AI giải các câu chưa có đáp án
             </button>
-            {solveMsg && <span style={{ fontSize: 13, color: "#53627f" }}>{solveMsg}</span>}
+            {solveMsg && <span style={{ fontSize: 13, color: "#4A5578" }}>{solveMsg}</span>}
           </div>
           {queue && queue.total === 0 && <p>Hàng đợi trống — mọi câu của đề này đã được xử lý.</p>}
           {(queue?.items || []).map((q) => {
             const correctLabel = q.options.find((o) => o.id === q.correct_option_id)?.label;
             return (
               <div key={q.id} style={box}>
-                {(q.passage_html || q.passage_text) && <div style={{ background: "#f4f7fd", padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 8 }} dangerouslySetInnerHTML={{ __html: q.passage_html || q.passage_text || "" }} />}
+                {(q.passage_html || q.passage_text) && <div style={{ background: "#EAF0FF", padding: 10, borderRadius: 12, fontSize: 13, marginBottom: 8 }} dangerouslySetInnerHTML={{ __html: q.passage_html || q.passage_text || "" }} />}
                 <div style={{ fontWeight: 650 }} dangerouslySetInnerHTML={{ __html: q.stem_html || q.stem_text }} />
                 <div style={{ display: "grid", gap: 4, fontSize: 14, margin: "8px 0" }}>
                   {q.options.map((o) => (
-                    <span key={o.id} style={o.label === (revAnswer[q.id] || correctLabel) ? { fontWeight: 700, color: "#12703a" } : {}}>
+                    <span key={o.id} style={o.label === (revAnswer[q.id] || correctLabel) ? { fontWeight: 700, color: "#15803D" } : {}}>
                       <span dangerouslySetInnerHTML={{ __html: `${o.label}. ${o.content_html || o.content_text}` }} />{o.label === correctLabel ? " ✓ (hệ thống nhận diện)" : ""}
                     </span>
                   ))}
                 </div>
-                <div style={{ color: "#53627f", fontSize: 13 }}>
+                <div style={{ color: "#4A5578", fontSize: 13 }}>
                   Trạng thái: {q.status} · Nguồn đáp án: {q.answer_source}
                   {q.answer_confidence != null ? ` · độ tin cậy ${Math.round(q.answer_confidence * 100)}%` : ""}
                   {q.order_in_source != null ? ` · Câu số ${q.order_in_source} trong đề gốc` : ""}
                 </div>
                 {q.ai_solution && (
-                  <div style={{ background: q.ai_solution.confidence >= 0.7 ? "#f5f0ff" : "#fef2f2", border: "1px solid #ddd0fa", borderRadius: 8, padding: 10, marginTop: 8, fontSize: 13 }}>
-                    <b>✦ AI giải thích</b> <span style={{ color: "#53627f" }}>({q.ai_solution.model} · tin cậy {Math.round(q.ai_solution.confidence * 100)}%
+                  <div style={{ background: q.ai_solution.confidence >= 0.7 ? "#f5f0ff" : "#fef2f2", border: "1px solid #DDD0FA", borderRadius: 12, padding: 10, marginTop: 8, fontSize: 13 }}>
+                    <b>✦ AI giải thích</b> <span style={{ color: "#4A5578" }}>({q.ai_solution.model} · tin cậy {Math.round(q.ai_solution.confidence * 100)}%
                     {q.ai_solution.suggested_difficulty ? ` · gợi ý độ khó ${q.ai_solution.suggested_difficulty}` : ""})</span>
                     <div dangerouslySetInnerHTML={{ __html: q.ai_solution.explanation_html || "" }} />
                     {q.ai_solution.confidence < 0.7 && (
-                      <div style={{ color: "#b42318", fontWeight: 650 }}>
+                      <div style={{ color: "#B91C1C", fontWeight: 650 }}>
                         AI chưa chắc chắn — nút Duyệt bị khoá cho đến khi bạn tự chọn đáp án đúng ở ô bên dưới.
                       </div>
                     )}
@@ -530,10 +534,10 @@ export default function Home() {
                     {units.map((u) => (<option key={u.id} value={u.code}>{u.label}</option>))}
                   </select>
                   <button disabled={q.answer_source === "ai_solved" && (q.answer_confidence ?? 0) < 0.7 && !revAnswer[q.id]}
-                    style={{ padding: "8px 14px", background: "#12703a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700,
+                    style={{ padding: "8px 14px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700,
                       opacity: q.answer_source === "ai_solved" && (q.answer_confidence ?? 0) < 0.7 && !revAnswer[q.id] ? 0.45 : 1 }}
                     onClick={() => doReview(q, "approve")}>Duyệt vào kho</button>
-                  <button style={{ padding: "8px 14px", background: "#fff", color: "#b42318", border: "1px solid #e5b3ae", borderRadius: 8, fontWeight: 700 }} onClick={() => doReview(q, "reject")}>Loại bỏ</button>
+                  <button style={{ padding: "8px 14px", background: "#fff", color: "#B91C1C", border: "1px solid #F0B8B2", borderRadius: 12, fontWeight: 700 }} onClick={() => doReview(q, "reject")}>Loại bỏ</button>
                 </div>
               </div>
             );
@@ -545,7 +549,7 @@ export default function Home() {
         <section>
           <div style={{ ...box, marginBottom: 12 }}>
             <b>Mẫu đề của tôi</b>
-            <span style={{ color: "#53627f", fontSize: 13 }}> — tự dựng mẫu theo đúng kho câu của bạn. Số liệu "kho có" là câu đã duyệt + có đáp án.</span>
+            <span style={{ color: "#4A5578", fontSize: 13 }}> — tự dựng mẫu theo đúng kho câu của bạn. Số liệu "kho có" là câu đã duyệt + có đáp án.</span>
             {templates.filter((tp) => !tp.is_system).map((tp) => (
               <div key={tp.id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, fontSize: 14 }}>
                 <span style={{ flex: 1 }}><b>{tp.name}</b> · {tp.total_questions} câu · {tp.duration_minutes} phút</span>
@@ -561,17 +565,17 @@ export default function Home() {
               <label style={{ fontSize: 13 }}>Thời gian (phút) <input type="number" min={1} value={tplDuration} onChange={(e) => setTplDuration(Number(e.target.value))} style={{ padding: 8, width: 70 }} /></label>
             </div>
             {tplSections.map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8, background: "#f6f8fc", borderRadius: 8, padding: 8 }}>
+              <div key={i} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8, background: "#F4F6FB", borderRadius: 12, padding: 8 }}>
                 <input value={s.name} onChange={(e) => setSection(i, { name: e.target.value })} style={{ padding: 8, flex: 1 }} placeholder="Tên phần" />
                 <select value={s.question_type} onChange={(e) => setSection(i, { question_type: e.target.value })} style={{ padding: 8 }}>
                   {qtypes.map((qt) => (<option key={qt.id} value={qt.code}>{qt.label}</option>))}
                 </select>
-                <span style={{ fontSize: 12, color: "#53627f" }}>
+                <span style={{ fontSize: 12, color: "#4A5578" }}>
                   kho có: {avail[s.question_type] ? `${avail[s.question_type].standalone} độc lập · ${avail[s.question_type].with_passage} gắn đoạn` : "0 câu"}
                 </span>
                 <label style={{ fontSize: 13 }}>Số câu <input type="number" min={1} value={s.question_count} onChange={(e) => setSection(i, { question_count: Number(e.target.value) })} style={{ padding: 7, width: 60 }} /></label>
                 <label style={{ fontSize: 13 }}><input type="checkbox" checked={s.with_passage} onChange={(e) => setSection(i, { with_passage: e.target.checked })} /> Gắn đoạn văn</label>
-                <span style={{ fontSize: 12, color: "#53627f" }}>% NB/TH/VD/VDC:</span>
+                <span style={{ fontSize: 12, color: "#4A5578" }}>% NB/TH/VD/VDC:</span>
                 {(["nb", "th", "vd", "vdc"] as const).map((k) => (
                   <input key={k} value={s[k]} onChange={(e) => setSection(i, { [k]: e.target.value } as Partial<TplSectionForm>)}
                     style={{ padding: 7, width: 44 }} placeholder={k.toUpperCase()} />
@@ -581,11 +585,11 @@ export default function Home() {
             ))}
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button style={btn} onClick={() => setTplSections((prev) => [...prev, { name: `Phần ${prev.length + 1}`, question_type: "vocabulary_mc", question_count: 5, with_passage: false, nb: "", th: "", vd: "", vdc: "" }])}>+ Thêm phần</button>
-              <button style={{ padding: "8px 14px", background: "#12703a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={saveTemplate}>
+              <button style={{ padding: "8px 14px", background: "#15803D", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }} onClick={saveTemplate}>
                 {editTplId ? "Lưu thay đổi" : "Lưu mẫu mới"}
               </button>
               {editTplId && <button style={btn} onClick={() => setEditTplId(null)}>Huỷ sửa</button>}
-              <span style={{ fontSize: 13, color: "#53627f", alignSelf: "center" }}>
+              <span style={{ fontSize: 13, color: "#4A5578", alignSelf: "center" }}>
                 Tổng: {tplSections.reduce((a, s) => a + (s.question_count || 0), 0)} câu · Để trống % độ khó = lấy mọi mức
               </span>
             </div>
@@ -598,7 +602,7 @@ export default function Home() {
             <select value={genVersions} onChange={(e) => setGenVersions(Number(e.target.value))} style={{ padding: 9 }}>
               <option value={1}>1 mã đề</option><option value={2}>2 mã đề</option><option value={4}>4 mã đề</option><option value={8}>8 mã đề</option>
             </select>
-            <button style={{ padding: "9px 16px", background: "#173a7a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }} onClick={doGenerate}>
+            <button style={{ padding: "9px 16px", background: "#2547D0", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700 }} onClick={doGenerate}>
               🎲 Sinh đề từ kho đã duyệt
             </button>
           </div>
@@ -628,7 +632,7 @@ export default function Home() {
                 <label style={{ fontSize: 13 }}><input type="checkbox" checked={prevTeacher} onChange={(e) => setPrevTeacher(e.target.checked)} /> Hiện đáp án</label>
                 <button style={btn} onClick={() => openPrint(prevTeacher)}>🖨 Mở bản in / PDF</button>
               </div>
-              <div style={{ marginTop: 12, borderTop: "1px solid #e3e9f4", paddingTop: 10 }}>
+              <div style={{ marginTop: 12, borderTop: "1px solid #E3E8F4", paddingTop: 10 }}>
                 {(() => {
                   const ver = genExam.versions.find((v) => v.code === prevCode);
                   const seenPassage = new Set<string>();
@@ -653,6 +657,7 @@ export default function Home() {
           )}
         </section>
       )}
-    </main>
+      </main>
+    </div>
   );
 }

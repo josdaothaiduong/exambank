@@ -40,23 +40,28 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ maxWidth: 420, margin: "48px auto" }}>
-      <h1>ExamBank AI</h1>
-      <p>{mode === "login" ? "Đăng nhập để vào ngân hàng đề của bạn." : "Đăng ký — hệ thống tự tạo workspace cá nhân cho bạn."}</p>
-      <form onSubmit={submit} style={{ display: "grid", gap: 10 }}>
-        {mode === "register" && (
-          <input placeholder="Họ tên" value={fullName} onChange={(e) => setFullName(e.target.value)} required style={{ padding: 10 }} />
-        )}
-        <input placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: 10 }} />
-        <input placeholder="Mật khẩu (ít nhất 8 ký tự)" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ padding: 10 }} />
-        {error && <p style={{ color: "#b42318" }}>{error}</p>}
-        <button disabled={busy} style={{ padding: 11, background: "#173a7a", color: "#fff", border: 0, borderRadius: 8, fontWeight: 700 }}>
-          {busy ? "Đang xử lý..." : mode === "login" ? "Đăng nhập" : "Đăng ký"}
+    <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "linear-gradient(135deg, #101B3C 0%, #1B37A8 58%, #2547D0 100%)" }}>
+      <div style={{ width: "min(420px, 100%)", background: "#fff", borderRadius: 16, padding: 28, boxShadow: "0 24px 48px -16px rgb(0 0 0 / .45)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <span style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(135deg, #2547D0, #7C3AED)", display: "grid", placeItems: "center", fontSize: 20 }}>📚</span>
+          <h1 style={{ margin: 0, fontSize: 26 }}>ExamBank AI</h1>
+        </div>
+        <p style={{ color: "#4A5578", marginTop: 4 }}>{mode === "login" ? "Đăng nhập để vào ngân hàng đề của bạn." : "Đăng ký — hệ thống tự tạo workspace cá nhân cho bạn."}</p>
+        <form onSubmit={submit} style={{ display: "grid", gap: 10 }}>
+          {mode === "register" && (
+            <input placeholder="Họ tên" value={fullName} onChange={(e) => setFullName(e.target.value)} required style={{ padding: 12 }} />
+          )}
+          <input placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: 12 }} />
+          <input placeholder="Mật khẩu (ít nhất 8 ký tự)" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ padding: 12 }} />
+          {error && <p style={{ color: "#B91C1C", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: "9px 12px", margin: 0 }}>{error}</p>}
+          <button disabled={busy} style={{ padding: 12, background: "#2547D0", color: "#fff", border: 0, borderRadius: 12, fontWeight: 700, minHeight: 48 }}>
+            {busy ? "Đang xử lý..." : mode === "login" ? "Đăng nhập" : "Đăng ký"}
+          </button>
+        </form>
+        <button onClick={() => setMode(mode === "login" ? "register" : "login")} style={{ marginTop: 14, background: "none", border: 0, color: "#2547D0", cursor: "pointer", fontWeight: 600, padding: 6 }}>
+          {mode === "login" ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập"}
         </button>
-      </form>
-      <button onClick={() => setMode(mode === "login" ? "register" : "login")} style={{ marginTop: 12, background: "none", border: 0, color: "#173a7a", cursor: "pointer" }}>
-        {mode === "login" ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập"}
-      </button>
+      </div>
     </main>
   );
 }

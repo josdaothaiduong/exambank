@@ -1,0 +1,181 @@
+/* ExamBank — Design System V2 (bản sắc ExamBank)
+   Nguồn: ~/workspace/design-refresh/tokens-v2.css [data-theme="exambank"]
+   Lưu ý: phần lớn style trong page.tsx là inline (inline thắng CSS) —
+   file này lo nền/font/focus/motion dùng chung + vỏ layout .eb-* mới. */
+
+:root {
+  --font-sans: "Be Vietnam Pro", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-full: 9999px;
+  --dur-press: 120ms; --dur-card: 200ms; --dur-screen: 300ms;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --shadow-card: 0 1px 2px rgb(16 27 60 / .05), 0 10px 24px -14px rgb(16 27 60 / .14);
+  --shadow-lift: 0 2px 4px rgb(16 27 60 / .08), 0 16px 32px -12px rgb(16 27 60 / .22);
+
+  /* Theme ExamBank */
+  --bg: #F4F6FB; --surface: #fff; --ink: #101B3C; --ink-2: #4A5578; --line: #E3E8F4;
+  --brand: #2547D0; --brand-hover: #1B37A8; --brand-soft: #EAF0FF; --navy: #101B3C;
+  --ok: #15803D; --ok-soft: #F0FDF4;
+  --wait: #B45309; --wait-soft: #FFFBEB;
+  --danger: #B91C1C; --danger-soft: #FEF2F2;
+  --ring: #2547D0;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15.5px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { color: var(--ink); line-height: 1.25; }
+h1 { font-weight: 800; letter-spacing: -0.01em; }
+
+/* Số liệu không nhảy cột */
+.numeric { font-variant-numeric: tabular-nums; }
+
+/* Form controls: thừa hưởng font, bo góc thống nhất */
+input, select, textarea, button { font: inherit; }
+input, select, textarea {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+}
+input::placeholder, textarea::placeholder { color: var(--ink-2); opacity: .75; }
+
+button {
+  cursor: pointer;
+  transition: background-color var(--dur-press) var(--ease),
+              border-color var(--dur-press) var(--ease),
+              color var(--dur-press) var(--ease),
+              transform var(--dur-press) var(--ease),
+              opacity var(--dur-press) var(--ease);
+}
+button:active { transform: scale(.98); }
+button:disabled { cursor: not-allowed; }
+
+/* Focus nhìn thấy được — cấm mất ring */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Section xuất hiện nhẹ khi đổi tab / tải trang */
+@keyframes eb-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+main section { animation: eb-fade-up var(--dur-screen) var(--ease) both; }
+
+/* ============ Vỏ trang ExamBank (.eb-*) — sidebar navy giống mẫu đã duyệt ============ */
+.eb-shell {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100vh;
+  align-items: start;
+}
+.eb-side {
+  background: var(--navy);
+  color: #C7D2F5;
+  padding: 22px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.eb-logo {
+  display: flex; gap: 10px; align-items: center;
+  margin: 0;
+  padding: 2px 10px 18px;
+  color: #fff; font-weight: 800; font-size: 18px;
+}
+.eb-logo .eb-mark {
+  width: 36px; height: 36px; border-radius: 11px; flex: 0 0 36px;
+  background: linear-gradient(135deg, #2547D0, #7C3AED);
+  display: grid; place-items: center; font-size: 18px;
+}
+.eb-side-label {
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: #7E8DBD; margin: 14px 10px 7px; font-weight: 700;
+}
+.eb-nav { display: flex; flex-direction: column; gap: 4px; }
+.eb-nav button {
+  display: flex; gap: 11px; align-items: center; text-align: left; width: 100%;
+  padding: 11px 12px; border-radius: 11px; border: 0;
+  background: transparent; color: #C7D2F5;
+  font-size: 14.5px; font-weight: 500;
+  transition: background-color 150ms var(--ease), color 150ms var(--ease);
+}
+.eb-nav button:hover { background: rgb(255 255 255 / .08); color: #fff; }
+.eb-nav button.eb-on {
+  background: var(--brand); color: #fff;
+  box-shadow: 0 10px 20px -10px #2547D0;
+  font-weight: 650;
+}
+.eb-side-foot {
+  margin-top: auto;
+  background: rgb(255 255 255 / .05);
+  border: 1px solid rgb(255 255 255 / .10);
+  border-radius: 14px; padding: 12px;
+  display: grid; gap: 10px;
+}
+.eb-side-foot label { font-size: 12.5px; color: #93A3CF; font-weight: 600; display: grid; gap: 6px; }
+.eb-side-foot select {
+  width: 100%; padding: 9px;
+  background: rgb(255 255 255 / .08); color: #fff;
+  border: 1px solid rgb(255 255 255 / .16); border-radius: 10px;
+}
+.eb-side-foot select option { color: var(--ink); background: #fff; }
+.eb-logout {
+  width: 100%; padding: 10px 12px; border-radius: 11px;
+  background: transparent; color: #C7D2F5;
+  border: 1px solid rgb(255 255 255 / .22); font-weight: 600;
+}
+.eb-logout:hover { background: rgb(255 255 255 / .10); color: #fff; }
+
+.eb-main {
+  min-width: 0;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 26px 28px 48px;
+}
+.eb-main > h1, .eb-page-title { font-size: 26px; margin: 2px 0 14px; }
+
+/* Mobile: sidebar thu thành thanh ngang cuộn được */
+@media (max-width: 900px) {
+  .eb-shell { grid-template-columns: 1fr; }
+  .eb-side {
+    position: static; height: auto; overflow: visible;
+    padding: 14px; gap: 8px;
+  }
+  .eb-logo { padding-bottom: 6px; }
+  .eb-side-label { display: none; }
+  .eb-nav { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .eb-nav button { width: auto; white-space: nowrap; flex: 0 0 auto; }
+  .eb-side-foot { margin-top: 4px; grid-template-columns: 1fr auto; align-items: end; }
+  .eb-logout { width: auto; }
+  .eb-main { padding: 20px 16px 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
